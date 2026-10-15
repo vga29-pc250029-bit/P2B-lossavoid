@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>スマートオーダー</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="guest-entry.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            background-color: #ffffff;
+            font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            user-select: none;
+            min-height: 100dvh;
+            height: 100dvh;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .header-green {
+            background-color: #2d8c3c;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+            flex-shrink: 0;
+        }
+        .header-green .title { font-size: 17px; font-weight: 700; }
+        .table-chip {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .btn-red {
+            background: linear-gradient(to bottom, #d32f2f, #b71c1c);
+            color: white;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: bold;
+            box-shadow: 0 4px #801010;
+            border: 1px solid #a01010;
+        }
+        .btn-red:active { box-shadow: 0 1px #801010; transform: translateY(3px); }
+        .btn-red:disabled { opacity: 0.4; box-shadow: none; }
+        .btn-green {
+            background: linear-gradient(to bottom, #66bb6a, #43a047);
+            color: white;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: bold;
+            box-shadow: 0 4px #2e7d32;
+            border: 1px solid #2e7d32;
+        }
+        .btn-green:active { box-shadow: 0 1px #2e7d32; transform: translateY(3px); }
+        .qty-btn {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            width: 2.6rem;
+            height: 2.6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #2d8c3c;
+            background: white;
+        }
+        .qty-btn:active { background: #e8f5e9; }
+        .cart-badge {
+            position: absolute;
+            top: 2px;
+            right: 14%;
+            background-color: #ff0000;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .hidden { display: none !important; }
+        .page { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .footer-nav {
+            flex-shrink: 0;
+            height: 64px;
+        }
+        .nav-btn {
+            border-top: 3px solid transparent;
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            background: white;
+            position: relative;
+        }
+        .nav-btn i { font-size: 17px; }
+        .nav-btn.active { color: #2d8c3c; border-top-color: #2d8c3c; background-color: #f0f9f1; }
+
+        /* ---- Category tabs ---- */
+        #category-tabs {
+            display: flex;
+            overflow-x: auto;
+            background: #f5f5f5;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 8px 8px 0;
+            gap: 6px;
+            flex-shrink: 0;
+            scrollbar-width: none;
+        }
+        #category-tabs::-webkit-scrollbar { display: none; }
+        .cat-tab {
+            flex-shrink: 0;
+            padding: 9px 14px;
+            border-radius: 20px 20px 0 0;
+            background: #e0e0e0;
+            color: #555;
+            font-size: 13px;
+            font-weight: 700;
+            border: none;
+            white-space: nowrap;
+        }
+        .cat-tab.active { background: #2d8c3c; color: white; }
+
+        /* ---- Search ---- */
+        #search-wrap { padding: 8px 12px; background: white; flex-shrink: 0; border-bottom: 1px solid #eee; }
+        #search-input {
+            width: 100%;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            padding: 9px 16px 9px 38px;
+            font-size: 14px;
+            background: #f5f5f5 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="%23999" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 12px center;
+            background-size: 16px;
+            outline: none;
+        }
+        #search-input:focus { border-color: #2d8c3c; background-color: white; }
+
+        /* ---- Menu grid ---- */
+        #menu-scroll { flex: 1; overflow-y: auto; padding: 10px; -webkit-overflow-scrolling: touch; }
+        .menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        @media (min-width: 480px) { .menu-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (min-width: 768px) { .menu-grid { grid-template-columns: repeat(4, 1fr); } }
+        .menu-card {
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            cursor: pointer;
+            position: relative;
+        }
+        .menu-card:active { background: #f7faf7; }
+        .menu-card.sold-out { cursor: default; }
+        .menu-card.sold-out .menu-media { filter: grayscale(1); opacity: 0.5; }
+        .menu-card.sold-out .menu-name,
+        .menu-card.sold-out .menu-price { opacity: 0.45; }
+        .sold-out-badge {
+            position: absolute; top: 6px; right: 6px; z-index: 2;
+            background: #555; color: #fff; font-size: 10.5px; font-weight: 900;
+            border-radius: 20px; padding: 2px 9px;
+        }
+        .low-stock-badge {
+            position: absolute; top: 6px; right: 6px; z-index: 2;
+            background: #ff8f00; color: #fff; font-size: 10px; font-weight: 900;
+            border-radius: 20px; padding: 2px 8px;
+        }
+        .menu-media {
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: linear-gradient(135deg, #f0f4f0, #e0ebe0);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        .menu-image,
+        .menu-icon {
+            width: 100%;
+            height: 100%;
+        }
+        .menu-image {
+            display: block;
+            object-fit: cover;
+            background: #fff;
+        }
+        .menu-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+        }
+        .menu-name {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #222;
+            line-height: 1.3;
+            min-height: 2.4em;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .menu-bottom { display: flex; align-items: center; justify-content: space-between; }
+        .menu-price { font-size: 14px; font-weight: 900; color: #b71c1c; }
+        .in-cart-dot {
+            position: absolute;
+            top: 6px; right: 6px;
+            background: #2d8c3c;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 20px;
+            padding: 1px 7px;
+            display: none;
+        }
+        .sold-out-badge,
+        .low-stock-badge,
+        .in-cart-dot {
+            right: auto;
+            left: 6px;
+            z-index: 7;
+        }
+        .info-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            z-index: 8;
+            width: 30px;
+            height: 30px;
+            border: 1px solid #2d8c3c;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.96);
+            color: #2d8c3c;
+            display: grid;
+            place-items: center;
+            font-size: 17px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.16);
+        }
+        .info-btn:active { background: #e8f5e9; transform: scale(0.94); }
+        .empty-result { text-align: center; color: #999; padding: 60px 20px; grid-column: 1/-1; }
+
+        /* ---- Allergy information modal ---- */
+        #info-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 360;
+            padding: 18px;
+            background: rgba(0,0,0,0.56);
+            display: grid;
+            place-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        #info-overlay.show { opacity: 1; pointer-events: auto; }
+        #info-modal {
+            width: min(92vw, 390px);
+            max-height: 88dvh;
+            overflow-y: auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 16px 44px rgba(0,0,0,0.28);
+            transform: translateY(10px);
+            transition: transform 0.2s ease;
+        }
+        #info-overlay.show #info-modal { transform: translateY(0); }
+        .info-modal-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            min-height: 52px;
+            padding: 12px 52px;
+            background: #2d8c3c;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 800;
+        }
+        .info-close-btn {
+            position: absolute;
+            right: 10px;
+            width: 34px;
+            height: 34px;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.18);
+            color: #fff;
+            font-size: 19px;
+        }
+        .info-modal-body { padding: 14px; }
+        .info-photo {
+            width: 100%;
+            aspect-ratio: 4/3;
+            overflow: hidden;
+            border: 1px solid #e1e7e2;
+            border-radius: 6px;
+            background: #f4f7f4;
+            display: grid;
+            place-items: center;
+            font-size: 64px;
+        }
+        .info-photo img { width: 100%; height: 100%; object-fit: cover; }
+        .info-name-box { padding: 14px 4px 10px; font-size: 19px; font-weight: 900; color: #202620; }
+        .info-allergy-box {
+            border: 1px solid #f0c7c7;
+            border-left: 4px solid #c62828;
+            border-radius: 6px;
+            background: #fff7f7;
+            padding: 12px;
+        }
+        .info-allergy-title { color: #9d1717; font-size: 16px; font-weight: 900; margin-bottom: 7px; }
+        .info-allergy-value { color: #2d3330; font-size: 14px; font-weight: 700; line-height: 1.65; word-break: break-word; }
+        .info-match-note { margin-top: 7px; color: #68716b; font-size: 11px; line-height: 1.45; }
+        .info-source-note { margin-top: 11px; color: #68716b; font-size: 11px; line-height: 1.55; }
+        .info-source-note a { color: #237531; font-weight: 800; text-decoration: underline; }
+
+        /* ---- Qty modal ---- */
+        #qty-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 300;
+            display: flex; align-items: flex-end; justify-content: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s;
+        }
+        #qty-overlay.show { opacity: 1; pointer-events: auto; }
+        #qty-modal {
+            background: white;
+            width: 100%;
+            max-width: 480px;
+            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.32,0.72,0,1);
+        }
+        #qty-overlay.show #qty-modal { transform: translateY(0); }
+        #qty-modal .item-title { font-size: 19px; font-weight: 900; color: #222; margin-bottom: 4px; }
+        #qty-modal .item-price { font-size: 16px; color: #b71c1c; font-weight: 700; margin-bottom: 18px; }
+        #qty-modal .qty-row { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 20px; }
+        #qty-modal .qty-num { font-size: 22px; font-weight: 900; min-width: 40px; text-align: center; }
+        #qty-modal .modal-btns { display: flex; gap: 10px; }
+        #qty-modal .modal-btns button { flex: 1; }
+
+        /* ---- Cart page ---- */
+        #cart-items-list .cart-row {
+            display: flex; align-items: center; gap: 10px;
+            border: 1px solid #eee; border-radius: 10px; padding: 10px; margin-bottom: 8px;
+        }
+        .cart-row .ci-media {
+            width: 58px;
+            height: 58px;
+            flex: 0 0 58px;
+            overflow: hidden;
+            border: 1px solid #e2e7e3;
+            border-radius: 6px;
+            background: #f4f7f4;
+        }
+        .cart-row .ci-image { width: 100%; height: 100%; display: block; object-fit: cover; }
+        .cart-row .ci-icon { width: 100%; height: 100%; display: grid; place-items: center; font-size: 26px; }
+        .cart-row .ci-info { flex: 1; min-width: 0; }
+        .cart-row .ci-name { font-size: 13.5px; font-weight: 700; color: #222; }
+        .cart-row .ci-sub { font-size: 12px; color: #b71c1c; font-weight: 700; }
+        .cart-row .qty-ctrl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .cart-row .qty-ctrl .qty-btn { width: 2rem; height: 2rem; font-size: 1rem; }
+
+        /* ---- History ---- */
+        .history-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
+        .history-card .h-time { font-size: 12px; color: #888; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+        .history-item-row { display: flex; justify-content: space-between; font-size: 13.5px; padding: 3px 0; }
+
+        /* ---- Toast ---- */
+        #toast {
+            position: fixed; bottom: 90px; left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(30,30,30,0.9); color: white;
+            padding: 10px 20px; border-radius: 30px; font-size: 13.5px; font-weight: 700;
+            opacity: 0; transition: all 0.3s; z-index: 400; white-space: nowrap; pointer-events: none;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ---- Loading ---- */
+        .spinner { width: 42px; height: 42px; border: 4px solid #e0ebe0; border-top-color: #2d8c3c; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="flex flex-col">
+
+<!-- 人数入力画面 -->
+<main id="view-guests" class="page">
+    <header class="header-green">
+        <span class="title"><i class="fa-solid fa-utensils" aria-hidden="true" style="margin-right:6px;"></i>スマートオーダー</span>
+        <span class="guest-header-label">ご来店</span>
+    </header>
+    <div class="guest-scroll">
+        <form id="guest-form" class="guest-form" novalidate>
+            <div class="guest-table-summary">
+                <i class="fa-solid fa-chair" aria-hidden="true"></i>
+                <span>卓番</span>
+                <strong id="guest-table-display">未設定</strong>
+            </div>
+            <div id="guest-table-field" class="guest-table-field hidden">
+                <label for="guest-table-input">卓番</label>
+                <input id="guest-table-input" type="text" inputmode="text" autocomplete="off" maxlength="4" placeholder="例: 01 / 01-1" aria-describedby="guest-table-error">
+                <p id="guest-table-error" class="guest-error" role="alert"></p>
+            </div>
+            <div class="guest-heading">
+                <h1 id="guest-heading">何名様でご利用ですか？</h1>
+                <p id="guest-count-hint">お子様を含む人数・1〜99名</p>
+            </div>
+            <label class="guest-count-label" for="guest-count">ご利用人数</label>
+            <div class="guest-stepper">
+                <button id="guest-minus" type="button" class="guest-step-button" aria-label="人数を1名減らす" title="人数を1名減らす"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
+                <div class="guest-count-value">
+                    <input id="guest-count" type="text" inputmode="numeric" autocomplete="off" maxlength="2" pattern="[0-9０-９]{1,2}" placeholder="--" aria-describedby="guest-count-hint guest-count-error" required>
+                    <span>名</span>
+                </div>
+                <button id="guest-plus" type="button" class="guest-step-button" aria-label="人数を1名増やす" title="人数を1名増やす"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            </div>
+            <div class="guest-presets" role="group" aria-label="人数を選択">
+                <button type="button" data-guest-count="1" aria-pressed="false">1<span>名</span></button>
+                <button type="button" data-guest-count="2" aria-pressed="false">2<span>名</span></button>
+                <button type="button" data-guest-count="3" aria-pressed="false">3<span>名</span></button>
+                <button type="button" data-guest-count="4" aria-pressed="false">4<span>名</span></button>
+                <button type="button" data-guest-count="5" aria-pressed="false">5<span>名</span></button>
+                <button type="button" data-guest-count="6" aria-pressed="false">6<span>名</span></button>
+            </div>
+            <p id="guest-count-error" class="guest-error" role="alert"></p>
+            <div class="guest-actions">
+                <button id="guest-confirm" type="submit" class="guest-confirm"><span id="guest-confirm-label">注文をはじめる</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
+                <button id="guest-cancel" type="button" class="guest-cancel hidden"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>変更せずに戻る</button>
+            </div>
+        </form>
+    </div>
+</main>
+
+<noscript>
+    <p class="guest-error">ご注文にはJavaScriptを有効にしてください。</p>
+</noscript>
+
+<!-- 1. メニュー画面 -->
+<div id="view-menu" class="page hidden">
+    <div class="header-green">
+        <span class="title"><i class="fa-solid fa-utensils" style="margin-right:6px;"></i>メニュー注文</span>
+        <button type="button" class="table-chip guest-edit" onclick="openGuestEntry()" title="人数を変更"><span id="table-chip">卓番 未設定</span><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+    </div>
+    <div id="search-wrap">
+        <input type="text" id="search-input" placeholder="メニュー名で検索" oninput="onSearchInput()">
+    </div>
+    <div id="category-tabs"></div>
+    <div id="menu-scroll">
+        <div class="menu-grid" id="menu-grid"></div>
+    </div>
+</div>
+
+<!-- 2. 注文かご画面 -->
+<div id="view-cart" class="page hidden">
+    <div class="header-green">
+        <span class="title"><i class="fa-solid fa-basket-shopping" style="margin-right:6px;"></i>注文かご</span>
+        <button type="button" class="table-chip guest-edit" onclick="openGuestEntry()" title="人数を変更"><span id="table-chip2">卓番 未設定</span><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3" id="cart-scroll">
+        <div id="cart-items-list"></div>
+    </div>
+    <div class="p-3 border-t border-gray-200 bg-white">
+        <div class="flex justify-between text-lg font-bold mb-3">
+            <span id="total-count">0点</span>
+            <span id="total-price">合計 0円 (税込)</span>
+        </div>
+        <div class="flex justify-center space-x-3">
+            <button onclick="showPage('view-menu')" class="btn-green flex-1"><i class="fa-solid fa-plus"></i> 追加で選ぶ</button>
+            <button onclick="submitOrder()" id="submit-btn" class="btn-red flex-1"><i class="fa-solid fa-paper-plane"></i> 注文する</button>
+        </div>
+    </div>
+</div>
+
+<!-- 3. 注文履歴画面 -->
+<div id="view-history" class="page hidden">
+    <div class="header-green">
+        <span class="title"><i class="fa-solid fa-receipt" style="margin-right:6px;"></i>注文履歴</span>
+        <button type="button" class="table-chip guest-edit" onclick="openGuestEntry()" title="人数を変更"><span id="table-chip3">卓番 未設定</span><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3">
+        <div id="orderContainer"></div>
+        <div id="history-empty" class="text-center text-gray-400 mt-20">
+            <div style="font-size:44px;margin-bottom:10px;">📋</div>
+            まだ注文履歴はありません
+        </div>
+    </div>
+</div>
+
+<!-- 下部ナビゲーション -->
+<nav id="order-navigation" class="grid grid-cols-5 border-t border-gray-300 bg-white footer-nav hidden" aria-label="注文メニュー">
+    <button onclick="showPage('view-menu')" class="nav-btn" id="nav-add"><i class="fa-solid fa-utensils"></i><span>メニュー</span></button>
+    <button onclick="showPage('view-cart')" class="nav-btn" id="nav-cart">
+        <div id="cart-badge" class="cart-badge hidden">0</div>
+        <i class="fa-solid fa-basket-shopping"></i><span>注文かご</span>
+    </button>
+    <button onclick="showPage('view-history')" class="nav-btn" id="nav-history"><i class="fa-solid fa-receipt"></i><span>注文履歴</span></button>
+    <button class="nav-btn" onclick="callStaff()"><i class="fa-solid fa-bell-concierge"></i><span>店員呼出</span></button>
+    <button class="nav-btn" onclick="showToast('レジにてお会計をお願いします')"><i class="fa-solid fa-cash-register"></i><span>会計する</span></button>
+</nav>
+
+<!-- 商品・アレルギー情報モーダル -->
+<div id="info-overlay" onclick="if(event.target===this) closeInfoModal()">
+    <section id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-item-name">
+        <div class="info-modal-header">
+            商品情報
+            <button type="button" class="info-close-btn" onclick="closeInfoModal()" aria-label="閉じる"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+        </div>
+        <div class="info-modal-body">
+            <div id="info-item-photo" class="info-photo">🍴</div>
+            <div id="info-item-name" class="info-name-box">商品名</div>
+            <div class="info-allergy-box">
+                <div class="info-allergy-title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> アレルギー情報</div>
+                <div id="info-item-allergens" class="info-allergy-value" role="status">取得中...</div>
+                <div id="info-match-note" class="info-match-note"></div>
+            </div>
+            <div class="info-source-note">
+                最新情報や製造工程上の注意事項は、注文前に
+                <a href="https://allergy.saizeriya.co.jp/allergy" target="_blank" rel="noopener noreferrer">サイゼリヤ公式アレルゲン検索</a>
+                または店舗スタッフへご確認ください。
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- 数量選択モーダル -->
+<div id="qty-overlay" onclick="if(event.target===this) closeQtyModal()">
+    <div id="qty-modal">
+        <div class="item-title" id="modal-item-name"></div>
+        <div class="item-price" id="modal-item-price"></div>
+        <div class="qty-row">
+            <button class="qty-btn" onclick="changeModalQty(-1)" style="width:3rem;height:3rem;font-size:1.5rem;">−</button>
+            <div class="qty-num" id="modal-qty-display">1</div>
+            <button class="qty-btn" onclick="changeModalQty(1)" style="width:3rem;height:3rem;font-size:1.5rem;">＋</button>
+        </div>
+        <div class="modal-btns">
+            <button onclick="closeQtyModal()" class="btn-green">キャンセル</button>
+            <button onclick="confirmAddToCart()" class="btn-red">注文かごへ追加</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="oracle-spring-api-client.js"></script>
+
+<script>
+    let tableNumber = tableFromHash();
+    let guestCount = null;
+    let visitConfirmed = false;
+    let currentPage = 'view-guests';
+    let guestReturnPage = 'view-menu';
+    let isSubmittingOrder = false;
+
+    let currentQty = 1;
+    let modalCode = null;
+    let cart = [];
+    let currentCategory = 'all';
+    let searchKeyword = '';
+
+    // ---- Spring API経由でOracleの商品マスタを取得 ----
+    let menuData = {};
+    let menuList = [];
+    let menuLoadState = 'loading';
+    let menuLoadPromise = null;
+    let officialAllergyList = [];
+    let officialAllergyPromise = null;
+    let infoModalCode = null;
+
+    function halfWidthDigits(value) {
+        return String(value ?? '').trim().replace(/[０-９]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xfee0));
+    }
+
+    function normalizeTableNo(value) {
+        const match = halfWidthDigits(value).match(/^(\d{1,2})(?:-(\d))?$/);
+        if (!match || Number(match[1]) < 1 || Number(match[1]) > 99) return '';
+        return match[1].padStart(2, '0') + (match[2] === undefined ? '' : `-${match[2]}`);
+    }
+
+    function tableFromHash() {
+        try {
+            return normalizeTableNo(decodeURIComponent(location.hash.slice(1)));
+        } catch {
+            return '';
+        }
+    }
+
+    function parseGuestCount(value) {
+        const text = halfWidthDigits(value);
+        if (!/^\d{1,2}$/.test(text)) return null;
+        const count = Number(text);
+        return count >= 1 && count <= 99 ? count : null;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+    }
+
+    function normalizeMenuName(value) {
+        return String(value || '').normalize('NFKC').toLowerCase()
+            .replace(/[\s　]/g, '')
+            .replace(/[・･.,，、。!！?？'"“”‘’()（）\[\]【】「」『』]/g, '');
+    }
+
+    const officialMenuAliases = new Map(Object.entries({
+        'アロスティチーニ': 'アロスティチーニ（ラムの串焼き）',
+        'アロスティチーニ（Ｗサイズ）': 'アロスティチーニ（ラムの串焼き）',
+        'キャロットラペ': 'キャロットラぺ',
+        'チョリソー': 'チョリソー（辛味ソーセージ）',
+        'ポテトのグリル': 'ポテトのグリル（ハッシュドポテト）',
+        'ハモン・セラーヌ': '生ハム',
+        '生ハムとモッツァレラの盛合せ': '生ハムとバッファローモッツァレラの盛合せ',
+        '半熟卵のペペロンチーノ': '半熟卵のぺペロンチーノ',
+        'ラム（仔羊）のランプステーキ': 'ラムのランプステーキ',
+        'ラージライス': 'ライス',
+        'スモールライス': 'ライス',
+        'セットドリンクバー': 'ドリンクバー'
+    }).map(([localName, officialName]) => [normalizeMenuName(localName), officialName]));
+
+    async function loadOfficialAllergyData() {
+        if (officialAllergyList.length > 0) return officialAllergyList;
+        if (officialAllergyPromise) return officialAllergyPromise;
+        officialAllergyPromise = window.oracleApi.getAllergens()
+            .then(items => {
+                if (!Array.isArray(items)) throw new Error('Invalid allergy response');
+                officialAllergyList = items.filter(item => item && item.name);
+                return officialAllergyList;
+            })
+            .finally(() => { officialAllergyPromise = null; });
+        return officialAllergyPromise;
+    }
+
+    function findOfficialAllergyMenu(menuName) {
+        const target = normalizeMenuName(menuName);
+        const exact = officialAllergyList.find(item => normalizeMenuName(item.name) === target);
+        if (exact) return { item: exact, exact: true };
+        const officialName = officialMenuAliases.get(target);
+        if (!officialName) return null;
+        const aliasMatch = officialAllergyList.find(item => normalizeMenuName(item.name) === normalizeMenuName(officialName));
+        return aliasMatch ? { item: aliasMatch, exact: false } : null;
+    }
+
+    function getOfficialAllergenNames(item) {
+        if (!item || !Array.isArray(item.allergies)) return [];
+        return item.allergies
+            .filter(allergy => allergy && (allergy.isExist === true || allergy.isExist === 1 || allergy.isExist === '1'))
+            .map(allergy => String(allergy.name || '').trim())
+            .filter(Boolean);
+    }
+
+    function updateGuestButtons() {
+        const count = parseGuestCount(document.getElementById('guest-count').value);
+        document.getElementById('guest-minus').disabled = count === 1;
+        document.getElementById('guest-plus').disabled = count === 99;
+        document.querySelectorAll('[data-guest-count]').forEach(button => {
+            button.setAttribute('aria-pressed', String(Number(button.dataset.guestCount) === count));
+        });
+    }
+
+    function setGuestInput(value) {
+        const input = document.getElementById('guest-count');
+        input.value = value;
+        input.removeAttribute('aria-invalid');
+        document.getElementById('guest-count-error').textContent = '';
+        updateGuestButtons();
+    }
+
+    function prepareGuestEntry() {
+        let draft = '';
+        // The tab-local draft is only a prefill; every reload requires confirmation.
+        try {
+            if (tableNumber) draft = sessionStorage.getItem(`oracle-order:guests:${tableNumber}`) || '';
+        } catch { /* Ordering also works when browser storage is unavailable. */ }
+        setGuestInput(guestCount ?? parseGuestCount(draft) ?? '');
+        document.getElementById('guest-table-display').textContent = tableNumber || '未設定';
+        document.getElementById('guest-table-field').classList.toggle('hidden', Boolean(tableNumber));
+        document.getElementById('guest-table-input').value = tableNumber;
+        document.getElementById('guest-table-input').removeAttribute('aria-invalid');
+        document.getElementById('guest-table-error').textContent = '';
+        document.getElementById('guest-heading').textContent = visitConfirmed ? 'ご利用人数の変更' : '何名様でご利用ですか？';
+        document.getElementById('guest-confirm-label').textContent = visitConfirmed ? '人数を変更する' : '注文をはじめる';
+        document.getElementById('guest-cancel').classList.toggle('hidden', !visitConfirmed);
+    }
+
+    function openGuestEntry() {
+        if (isSubmittingOrder) return;
+        guestReturnPage = currentPage === 'view-guests' ? 'view-menu' : currentPage;
+        showPage('view-guests');
+    }
+
+    function confirmGuestEntry(event) {
+        event.preventDefault();
+        const tableInput = document.getElementById('guest-table-input');
+        const countInput = document.getElementById('guest-count');
+        const nextTable = tableNumber || normalizeTableNo(tableInput.value);
+        const nextCount = parseGuestCount(countInput.value);
+        document.getElementById('guest-table-error').textContent = nextTable ? '' : '卓番を01〜99、または01-1の形式で入力してください。';
+        document.getElementById('guest-count-error').textContent = nextCount === null ? '人数は1〜99名の整数で入力してください。' : '';
+        tableInput.setAttribute('aria-invalid', String(!nextTable));
+        countInput.setAttribute('aria-invalid', String(nextCount === null));
+        if (!nextTable || nextCount === null) {
+            (!nextTable ? tableInput : countInput).focus();
+            return;
+        }
+        tableNumber = nextTable;
+        guestCount = nextCount;
+        visitConfirmed = true;
+        try {
+            sessionStorage.setItem(`oracle-order:guests:${tableNumber}`, String(guestCount));
+        } catch { /* The confirmed count remains available in memory. */ }
+        if (location.hash !== `#${tableNumber}`) {
+            try { history.replaceState(null, '', `#${tableNumber}`); } catch { /* file:// may restrict history updates. */ }
+        }
+        document.querySelectorAll('#table-chip, #table-chip2, #table-chip3').forEach(el => {
+            el.textContent = `卓番 ${tableNumber}・${guestCount}名`;
+            el.parentElement.setAttribute('aria-label', `卓番 ${tableNumber}、${guestCount}名。人数を変更`);
+        });
+        showPage(guestReturnPage);
+    }
+
+    // カテゴリ判定（メニュー番号の先頭から推定）
+    function getCategory(code) {
+        code = String(code);
+        if (code.startsWith("1")) return "appetizer";
+        if (code.startsWith("21")) return "doria";
+        if (code.startsWith("22")) return "pizza";
+        if (code.startsWith("23")) return "pasta";
+        if (code.startsWith("24")) return "meat";
+        if (code.startsWith("31")) return "rice";
+        if (code.startsWith("32")) return "dessert";
+        if (code.startsWith("5")) return "drink";
+        return "other";
+    }
+    const categoryMeta = {
+        all:       { label: "すべて",       icon: "🍽" },
+        appetizer: { label: "前菜・サラダ", icon: "🥗" },
+        doria:     { label: "ドリア",       icon: "🍚" },
+        pizza:     { label: "ピザ",         icon: "🍕" },
+        pasta:     { label: "パスタ",       icon: "🍝" },
+        meat:      { label: "肉・グリル",   icon: "🥩" },
+        rice:      { label: "ライス・パン", icon: "🍞" },
+        dessert:   { label: "デザート",     icon: "🍰" },
+        drink:     { label: "ドリンク",     icon: "🥤" },
+        other:     { label: "その他",       icon: "🍴" },
+    };
+
+    async function loadMenuFromOracle() {
+        const menus = await window.oracleApi.getMenus();
+        if (!Array.isArray(menus)) throw new Error('Invalid menu response');
+        const list = [];
+        menus.forEach(data => {
+            const code = String(data.code);
+            const category = Object.hasOwn(categoryMeta, data.category) ? data.category : getCategory(code);
+            const stockQty = (data.stockQty === null || data.stockQty === undefined || data.stockQty === '') ? null : Number(data.stockQty);
+            list.push({
+                code,
+                name: data.name || data.shortName || '(名称未設定)',
+                price: Number(data.price) || 0,
+                category,
+                icon: categoryMeta[category]?.icon || '🍴',
+                prepStation: data.prepStation || '',
+                cookTime: Number(data.cookTime) || 0,
+                imageUrl: data.imageUrl || `/images/${encodeURIComponent(data.name || data.shortName || '(名称未設定)')}.png`,
+                soldOut: !!data.soldOut,
+                stockQty: stockQty,
+                allergens: Array.isArray(data.allergens) ? data.allergens : []
+            });
+        });
+        list.sort((a, b) => a.code.localeCompare(b.code));
+        menuList = list;
+        menuData = {};
+        list.forEach(item => { menuData[item.code] = item; });
+    }
+
+    // 在庫切れ判定（品切れフレガーまたは残数0）
+    function isOutOfStock(item) {
+        if (item.soldOut) return true;
+        if (item.stockQty !== null && item.stockQty <= 0) return true;
+        return false;
+    }
+
+    // ---- カテゴリタブ描画 ----
+    function renderCategoryTabs() {
+        const usedCats = ['all', ...new Set(menuList.map(m => m.category))];
+        const wrap = document.getElementById('category-tabs');
+        wrap.innerHTML = usedCats.map(cat => `
+            <button class="cat-tab${cat === currentCategory ? ' active' : ''}" onclick="selectCategory('${cat}')">
+                ${categoryMeta[cat].icon} ${categoryMeta[cat].label}
+            </button>
+        `).join('');
+    }
+
+    function selectCategory(cat) {
+        currentCategory = cat;
+        renderCategoryTabs();
+        renderMenuGrid();
+        document.getElementById('menu-scroll').scrollTop = 0;
+    }
+
+    function onSearchInput() {
+        searchKeyword = document.getElementById('search-input').value.trim();
+        renderMenuGrid();
+    }
+
+    // ---- メニューグリッド描画 ----
+    function renderMenuGrid() {
+        let items = menuList;
+        if (currentCategory !== 'all') items = items.filter(m => m.category === currentCategory);
+        if (searchKeyword) items = items.filter(m => m.name.includes(searchKeyword) || m.code.includes(searchKeyword));
+
+        const grid = document.getElementById('menu-grid');
+        if (menuLoadState === 'loading') {
+            grid.innerHTML = '<div class="empty-result" role="status"><div class="spinner" aria-hidden="true"></div>メニューを読み込み中...</div>';
+            return;
+        }
+        if (menuLoadState === 'error') {
+            grid.innerHTML = '<div class="empty-result" role="alert">メニューを取得できませんでした。<button type="button" class="menu-retry" onclick="refreshMenu()"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> 再読み込み</button></div>';
+            return;
+        }
+        if (menuList.length === 0) {
+            grid.innerHTML = '<div class="empty-result">現在ご注文いただけるメニューがありません。<button type="button" class="menu-retry" onclick="refreshMenu()"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> 再読み込み</button></div>';
+            return;
+        }
+        if (items.length === 0) {
+            grid.innerHTML = `<div class="empty-result"><div style="font-size:40px;margin-bottom:8px;">🔍</div>該当するメニューが見つかりません</div>`;
+            return;
+        }
+        grid.innerHTML = items.map(item => {
+            const inCartQty = cart.filter(c => c.code === item.code).reduce((s, c) => s + c.qty, 0);
+            const outOfStock = isOutOfStock(item);
+            const lowStock = !outOfStock && item.stockQty !== null && item.stockQty <= 5;
+            return `
+            <article class="menu-card${outOfStock ? ' sold-out' : ''}" data-menu-code="${escapeHtml(item.code)}" role="button" tabindex="${outOfStock ? '-1' : '0'}" aria-disabled="${outOfStock}">
+                <button type="button" class="info-btn" data-info-code="${escapeHtml(item.code)}" aria-label="${escapeHtml(item.name)}のアレルギー情報" title="商品情報"><i class="fa-solid fa-circle-info" aria-hidden="true"></i></button>
+                ${inCartQty > 0 && !outOfStock ? `<div class="in-cart-dot" style="display:flex;align-items:center;">×${inCartQty}</div>` : ''}
+                ${outOfStock ? `<div class="sold-out-badge">品切れ</div>` : (lowStock ? `<div class="low-stock-badge">残${item.stockQty}点</div>` : '')}
+                <div class="menu-media">
+                    <img class="menu-image" src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+                    <div class="menu-icon" hidden>${item.icon}</div>
+                </div>
+                <div class="menu-name">${escapeHtml(item.name)}</div>
+                <div class="menu-bottom">
+                    <div class="menu-price">${item.price}円</div>
+                    <div class="qty-btn" style="width:2rem;height:2rem;font-size:1.1rem;${outOfStock ? 'opacity:.3;' : ''}">+</div>
+                </div>
+            </article>`;
+        }).join('');
+    }
+
+    // ---- 商品・アレルギー情報 ----
+    async function openInfoModal(code) {
+        const item = menuData[code];
+        if (!item) return;
+        infoModalCode = code;
+        document.getElementById('info-item-name').textContent = item.name;
+        document.getElementById('info-item-allergens').textContent = '公式情報を取得中...';
+        document.getElementById('info-match-note').textContent = '';
+
+        const photo = document.getElementById('info-item-photo');
+        photo.replaceChildren();
+        const image = document.createElement('img');
+        image.src = item.imageUrl;
+        image.alt = item.name;
+        image.onerror = () => { photo.textContent = item.icon || '🍴'; };
+        photo.appendChild(image);
+        document.getElementById('info-overlay').classList.add('show');
+
+        try {
+            await loadOfficialAllergyData();
+            if (infoModalCode !== code) return;
+            const match = findOfficialAllergyMenu(item.name);
+            if (!match) {
+                document.getElementById('info-item-allergens').textContent = '公式サイトで一致する商品を確認できませんでした';
+                document.getElementById('info-match-note').textContent = '誤表示を避けるため、アレルゲンの自動推測は行っていません。';
+                return;
+            }
+            const allergens = getOfficialAllergenNames(match.item);
+            document.getElementById('info-item-allergens').textContent = allergens.length ? allergens.join('・') : '主要アレルゲン該当なし';
+            document.getElementById('info-match-note').textContent = match.exact
+                ? 'サイゼリヤ公式サイトの商品情報'
+                : `公式サイト上の商品名：${match.item.name}`;
+        } catch (error) {
+            if (infoModalCode !== code) return;
+            const fallback = Array.isArray(item.allergens) ? item.allergens.filter(Boolean) : [];
+            document.getElementById('info-item-allergens').textContent = fallback.length
+                ? fallback.join('・')
+                : '公式情報を取得できませんでした';
+            document.getElementById('info-match-note').textContent = fallback.length
+                ? 'Oracleの商品マスタに登録された予備情報を表示しています。'
+                : '通信状況を確認するか、店舗スタッフへお問い合わせください。';
+        }
+    }
+
+    function closeInfoModal() {
+        document.getElementById('info-overlay').classList.remove('show');
+        infoModalCode = null;
+    }
+
+    // ---- 数量選択モーダル ----
+    function openQtyModal(code) {
+        if (!visitConfirmed || isSubmittingOrder) return;
+        const item = menuData[code];
+        if (!item || isOutOfStock(item)) {
+            showToast('⚠️ この商品は品切れ中です');
+            return;
+        }
+        modalCode = code;
+        currentQty = 1;
+        document.getElementById('modal-item-name').textContent = item.name;
+        document.getElementById('modal-item-price').textContent = item.price + '円';
+        document.getElementById('modal-qty-display').textContent = currentQty;
+        document.getElementById('qty-overlay').classList.add('show');
+    }
+    function closeQtyModal() {
+        document.getElementById('qty-overlay').classList.remove('show');
+        modalCode = null;
+    }
+    function changeModalQty(diff) {
+        currentQty = Math.max(1, currentQty + diff);
+        document.getElementById('modal-qty-display').textContent = currentQty;
+    }
+    function confirmAddToCart() {
+        if (!visitConfirmed || isSubmittingOrder) return;
+        const item = menuData[modalCode];
+        if (!item || isOutOfStock(item)) {
+            showToast('⚠️ この商品は品切れ中です');
+            closeQtyModal();
+            renderMenuGrid();
+            return;
+        }
+        const existing = cart.find(c => c.code === modalCode);
+        if (existing) {
+            existing.qty += currentQty;
+        } else {
+            cart.push({ code: modalCode, name: item.name, price: item.price, qty: currentQty });
+        }
+        updateCartBadge();
+        renderMenuGrid();
+        showToast(`${item.icon} ${item.name} を${currentQty}点 追加しました`);
+        closeQtyModal();
+    }
+
+    // ---- カートバッジ ----
+    function updateCartBadge() {
+        const badge = document.getElementById('cart-badge');
+        const totalCount = cart.reduce((s, c) => s + c.qty, 0);
+        if (totalCount > 0) {
+            badge.textContent = totalCount;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    // ---- 画面切り替え ----
+    function showPage(pageId) {
+        if (isSubmittingOrder) return;
+        if (pageId !== 'view-guests' && !visitConfirmed) pageId = 'view-guests';
+        currentPage = pageId;
+        document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+        document.getElementById(pageId).classList.remove('hidden');
+        document.getElementById('order-navigation').classList.toggle('hidden', pageId === 'view-guests');
+        if (pageId === 'view-guests') prepareGuestEntry();
+
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        if (pageId === 'view-menu') document.getElementById('nav-add').classList.add('active');
+        if (pageId === 'view-cart') {
+            document.getElementById('nav-cart').classList.add('active');
+            renderCart();
+        }
+        if (pageId === 'view-history') {
+            document.getElementById('nav-history').classList.add('active');
+            renderHistory();
+        }
+    }
+
+    // ---- カート画面描画 ----
+    function renderCart() {
+        const list = document.getElementById('cart-items-list');
+        if (cart.length === 0) {
+            list.innerHTML = `<div class="text-center text-gray-400 mt-16">
+                <div style="font-size:44px;margin-bottom:10px;">🛒</div>
+                注文かごは空です
+            </div>`;
+            document.getElementById('submit-btn').disabled = true;
+        } else {
+            document.getElementById('submit-btn').disabled = false;
+            list.innerHTML = cart.map((item, index) => {
+                const menuItem = menuData[item.code] || item;
+                const icon = menuItem.icon || '🍽';
+                const imageUrl = menuItem.imageUrl || item.imageUrl || '';
+                return `
+                <div class="cart-row">
+                    <div class="ci-media">
+                        ${imageUrl ? `<img class="ci-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false">` : ''}
+                        <div class="ci-icon" ${imageUrl ? 'hidden' : ''}>${icon}</div>
+                    </div>
+                    <div class="ci-info">
+                        <div class="ci-name">${escapeHtml(item.name)}</div>
+                        <div class="ci-sub">${item.price * item.qty}円</div>
+                    </div>
+                    <div class="qty-ctrl">
+                        <button class="qty-btn" onclick="updateCartQty(${index}, -1)">−</button>
+                        <div style="min-width:20px;text-align:center;font-weight:900;">${item.qty}</div>
+                        <button class="qty-btn" onclick="updateCartQty(${index}, 1)">＋</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        let totalP = 0, totalC = 0;
+        cart.forEach(item => { totalP += item.price * item.qty; totalC += item.qty; });
+        document.getElementById('total-count').textContent = totalC + '点';
+        document.getElementById('total-price').textContent = `合計 ${totalP}円 (税込)`;
+    }
+
+    function updateCartQty(index, diff) {
+        if (isSubmittingOrder) return;
+        cart[index].qty += diff;
+        if (cart[index].qty <= 0) cart.splice(index, 1);
+        updateCartBadge();
+        renderCart();
+        renderMenuGrid();
+    }
+
+    // ---- 注文履歴 ----
+    async function renderHistory() {
+        const container = document.getElementById('orderContainer');
+        const emptyMsg = document.getElementById('history-empty');
+        container.innerHTML = '<div class="empty-result" role="status">注文履歴を読み込み中...</div>';
+        emptyMsg.classList.add('hidden');
+        const requestedTable = tableNumber;
+
+        try {
+            const orders = await window.oracleApi.getOrdersByTable(requestedTable);
+            if (requestedTable !== tableNumber) return;
+            if (!Array.isArray(orders)) throw new Error('Invalid order history response');
+            container.innerHTML = '';
+            if (orders.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+            orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+            orders.forEach(order => {
+                const createdAt = new Date(order.createdAt);
+                const time = Number.isNaN(createdAt.getTime()) ? '--:--' : createdAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                const count = parseGuestCount(order.guestCount);
+                let total = 0;
+                const rows = (order.items || []).map(item => {
+                    total += item.price * item.qty;
+                    return `<div class="history-item-row"><span>${escapeHtml(item.name)} × ${Number(item.qty)}</span><span>${item.price * item.qty}円</span></div>`;
+                }).join('');
+                container.innerHTML += `
+                <div class="history-card">
+                    <div class="h-time"><i class="fa-regular fa-clock"></i> ${time}${count === null ? '' : ` ・ ${count}名`}</div>
+                    ${rows}
+                    <div class="text-right font-bold mt-2" style="color:#b71c1c;">合計 ${total}円</div>
+                </div>`;
+            });
+        } catch (e) {
+            if (requestedTable !== tableNumber) return;
+            console.error(e);
+            container.innerHTML = '<div class="empty-result" role="alert">履歴の取得に失敗しました<button type="button" class="menu-retry" onclick="renderHistory()"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> 再読み込み</button></div>';
+        }
+    }
+
+    // ---- 注文送信 ----
+    async function submitOrder() {
+        if (isSubmittingOrder) return;
+        if (!visitConfirmed || !normalizeTableNo(tableNumber) || parseGuestCount(guestCount) === null) {
+            openGuestEntry();
+            return;
+        }
+        if (cart.length === 0) {
+            showToast('注文かごが空です');
+            return;
+        }
+        const btn = document.getElementById('submit-btn');
+        isSubmittingOrder = true;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 送信中...';
+        try {
+            await window.oracleApi.createOrder({
+                table: tableNumber,
+                guestCount,
+                orderMethod: 'SELF',
+                items: cart.map(item => ({ ...item }))
+            });
+            cart = [];
+            updateCartBadge();
+            renderMenuGrid();
+            showToast('🎉 注文が送信されました！');
+            isSubmittingOrder = false;
+            showPage('view-history');
+        } catch (error) {
+            console.error(error);
+            showToast('⚠️ 送信に失敗しました。もう一度お試しください。');
+        } finally {
+            isSubmittingOrder = false;
+            btn.disabled = cart.length === 0;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 注文する';
+        }
+    }
+
+    // ---- 店員呼出 ----
+    function callStaff() {
+        showToast('🔔 店員をお呼びしました。少々お待ちください。');
+    }
+
+    // ---- トースト ----
+    let toastTimer;
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function refreshMenu() {
+        if (menuLoadPromise) return menuLoadPromise;
+        menuLoadState = 'loading';
+        renderMenuGrid();
+        menuLoadPromise = (async () => {
+            try {
+                await loadMenuFromOracle();
+                menuLoadState = 'ready';
+            } catch (error) {
+                menuLoadState = 'error';
+                console.error('メニューの取得に失敗しました', error);
+            } finally {
+                renderCategoryTabs();
+                renderMenuGrid();
+                menuLoadPromise = null;
+            }
+        })();
+        return menuLoadPromise;
+    }
+
+    document.getElementById('guest-form').addEventListener('submit', confirmGuestEntry);
+    document.getElementById('guest-count').addEventListener('input', () => {
+        document.getElementById('guest-count').removeAttribute('aria-invalid');
+        document.getElementById('guest-count-error').textContent = '';
+        updateGuestButtons();
+    });
+    document.querySelectorAll('[data-guest-count]').forEach(button => {
+        button.addEventListener('click', () => setGuestInput(button.dataset.guestCount));
+    });
+    document.getElementById('guest-minus').addEventListener('click', () => {
+        setGuestInput(Math.max(1, (parseGuestCount(document.getElementById('guest-count').value) ?? 2) - 1));
+    });
+    document.getElementById('guest-plus').addEventListener('click', () => {
+        setGuestInput(Math.min(99, (parseGuestCount(document.getElementById('guest-count').value) ?? 0) + 1));
+    });
+    document.getElementById('guest-cancel').addEventListener('click', () => showPage(guestReturnPage));
+    document.getElementById('menu-grid').addEventListener('click', event => {
+        const infoButton = event.target.closest('[data-info-code]');
+        if (infoButton) {
+            event.stopPropagation();
+            openInfoModal(infoButton.dataset.infoCode);
+            return;
+        }
+        const card = event.target.closest('[data-menu-code]');
+        if (card) openQtyModal(card.dataset.menuCode);
+    });
+    document.getElementById('menu-grid').addEventListener('keydown', event => {
+        if (event.target.matches('[data-menu-code]') && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            openQtyModal(event.target.dataset.menuCode);
+        }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeInfoModal();
+    });
+    window.addEventListener('hashchange', () => {
+        if (tableFromHash() !== tableNumber) location.reload();
+    });
+
+    showPage('view-guests');
+    refreshMenu();
+    window.openGuestEntry = openGuestEntry;
+    window.refreshMenu = refreshMenu;
+
+    // グローバル公開（インラインonclick用）
+    window.selectCategory = selectCategory;
+    window.onSearchInput = onSearchInput;
+    window.openInfoModal = openInfoModal;
+    window.closeInfoModal = closeInfoModal;
+    window.openQtyModal = openQtyModal;
+    window.closeQtyModal = closeQtyModal;
+    window.changeModalQty = changeModalQty;
+    window.confirmAddToCart = confirmAddToCart;
+    window.updateCartQty = updateCartQty;
+    window.showPage = showPage;
+    window.submitOrder = submitOrder;
+    window.callStaff = callStaff;
+    window.showToast = showToast;
+</script>
+</body>
+</html>
