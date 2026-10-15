@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CookList更新ツール</title>
+</head>
+
+<body>
+
+    <h2>CookList 更新</h2>
+
+    <input type="file" id="csvFile" accept=".csv">
+    <button id="uploadBtn">全削除して登録</button>
+
+    <div id="log"></div>
+
+    <script type="module">
+
+        import { initializeApp }
+            from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+
+        import {
+            getFirestore,
+            collection,
+            getDocs,
+            doc,
+            deleteDoc,
+            setDoc
+        }
+            from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA11hBtKkMkgzmng6Gn4KO98ZKlwJeEqxI",
+            authDomain: "lossavoid-d3205.firebaseapp.com",
+            projectId: "lossavoid-d3205",
+            storageBucket: "lossavoid-d3205.firebasestorage.app",
+            messagingSenderId: "775487807173",
+            appId: "1:775487807173:web:b0b53a07284ef3917d5aac"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const log = document.getElementById("log");
+
+        function addLog(text) {
+            log.innerHTML += text + "<br>";
+        }
+
+        document.getElementById("uploadBtn")
+            .addEventListener("click", async () => {
+
+                const file =
+                    document.getElementById("csvFile").files[0];
+
+                if (!file) {
+                    alert("CSVを選択してください");
+                    return;
+                }
+
+                try {
+
+                    addLog("CookList削除開始");
+
+                    const snapshot =
+                        await getDocs(
+                            collection(db, "CookList")
+                        );
+
+                    let deleteCount = 0;
+
+                    for (const document of snapshot.docs) {
+
+                        await deleteDoc(
+                            doc(
+                                db,
+                                "CookList",
+                                document.id
+                            )
+                        );
+
+                        deleteCount++;
+                    }
+
+                    addLog(
+                        `${deleteCount}件削除完了`
+                    );
+
+                    const text =
+                        await file.text();
+
+                    const rows =
+                        text.split(/\r?\n/);
+
+                    let insertCount = 0;
+
+                    for (const row of rows) {
+
+                        if (!row.trim()) continue;
+
+                        const cols =
+                            row.split(",");
+
+                        if (cols.length < 5) continue;
+
+                        const [
+                            code,
+                            name,
+                            price,
+                            section,
+                            cookTime
+                        ] = cols;
+
+                        await setDoc(
+                            doc(
+                                db,
+                                "CookList",
+                                code.trim()
+                            ),
+                            {
+                                code: code.trim(),
+                                name: name.trim(),
+                                price: Number(price),
+                                section: section.trim(),
+                                cookTime: Number(cookTime)
+                            }
+                        );
+
+                        insertCount++;
+                    }
+
+                    addLog(
+                        `${insertCount}件登録完了`
+                    );
+
+                    alert(
+                        "CookList更新完了"
+                    );
+
+                }
+                catch (error) {
+
+                    console.error(error);
+
+                    alert(
+                        "エラー: " +
+                        error.message
+                    );
+                }
+
+            });
+
+    </script>
+
+</body>
+
+</html>
