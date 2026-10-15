@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KDS 調理順シミュレーター</title>
+    <style>
+        :root {
+            --ink: #17202a;
+            --muted: #64748b;
+            --line: #cbd5e1;
+            --paper: #f8fafc;
+            --panel: #0f62a8;
+            --theme: #0f62a8;
+            --accent: #f2b705;
+            --success: #16845b;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; color: var(--ink); background: var(--paper); font-family: "Yu Gothic UI", "Meiryo", sans-serif; letter-spacing: 0; }
+        button, select, a { font: inherit; }
+        button { cursor: pointer; }
+        .topbar { background: #fff; border-bottom: 1px solid var(--line); }
+        .topbar-inner { max-width: 1180px; min-height: 64px; margin: auto; padding: 10px 18px; display: flex; align-items: center; gap: 14px; }
+        .back { width: 42px; height: 42px; display: grid; place-items: center; color: var(--ink); border: 1px solid var(--line); background: #fff; text-decoration: none; font-size: 24px; }
+        h1 { margin: 0; font-size: 22px; }
+        .record-counter { margin-left: auto; color: var(--muted); font-weight: 700; white-space: nowrap; }
+        main { max-width: 1180px; margin: auto; padding: 20px 18px 96px; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; }
+        .panel { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
+        .panel h2 { margin: 0 0 5px; font-size: 20px; }
+        .subtle { margin: 0; color: var(--muted); line-height: 1.65; }
+        .toolbar { margin: 18px 0 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .segmented { display: inline-grid; grid-template-columns: repeat(4, 44px); border: 1px solid #94a3b8; }
+        .segmented button { height: 38px; border: 0; border-right: 1px solid #94a3b8; background: #fff; font-weight: 800; }
+        .segmented button:last-child { border-right: 0; }
+        .segmented button.active { color: #fff; background: var(--theme); }
+        .secondary, .primary { min-height: 42px; border: 1px solid #94a3b8; padding: 8px 14px; font-weight: 800; }
+        .secondary { background: #fff; color: var(--ink); }
+        .primary { color: #fff; background: var(--theme); border-color: var(--theme); }
+        .primary:disabled, .secondary:disabled { cursor: not-allowed; opacity: .45; }
+        .timer { margin-left: auto; color: var(--theme); font: 800 20px Consolas, monospace; }
+        .scenario-list { display: grid; gap: 8px; min-height: 180px; }
+        .dish { min-height: 92px; display: grid; grid-template-columns: 42px 76px minmax(0, 1fr) 44px 44px; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--line); background: #fff; }
+        .dish.dragging { opacity: .45; }
+        .rank { width: 34px; height: 34px; display: grid; place-items: center; color: #fff; background: var(--theme); border-radius: 50%; font-weight: 900; }
+        .dish img { width: 76px; height: 68px; object-fit: cover; border: 1px solid #e2e8f0; background: #f1f5f9; }
+        .dish-name { margin: 0 0 5px; font-weight: 900; font-size: 17px; overflow-wrap: anywhere; }
+        .dish-meta { color: var(--muted); font-size: 13px; }
+        .move { width: 42px; height: 42px; border: 1px solid var(--line); background: #f8fafc; font-size: 21px; font-weight: 900; }
+        .move:disabled { opacity: .25; cursor: default; }
+        .loading { min-height: 180px; display: grid; place-items: center; color: var(--muted); font-weight: 700; }
+        .save-row { margin-top: 16px; display: flex; gap: 10px; }
+        .save-row .primary { flex: 1; }
+        .saved { margin-top: 12px; padding: 10px 12px; color: #0d6849; background: #e9f8f1; border-left: 4px solid var(--success); font-weight: 800; }
+        .hidden { display: none !important; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0; }
+        .stat { padding: 12px; border: 1px solid var(--line); }
+        .stat strong { display: block; color: var(--theme); font-size: 24px; }
+        .history { display: grid; gap: 10px; margin-top: 14px; }
+        .history-item { padding: 11px 0; border-top: 1px solid #e2e8f0; }
+        .history-item:first-child { border-top: 0; }
+        .history-time { color: var(--muted); font-size: 12px; }
+        .history-order { margin-top: 5px; line-height: 1.55; font-size: 14px; overflow-wrap: anywhere; }
+        .export { width: 100%; margin-top: 12px; }
+        .empty { color: var(--muted); padding: 18px 0; text-align: center; }
+        @media (max-width: 780px) {
+            .topbar-inner { min-height: 56px; padding: 8px 12px; }
+            h1 { font-size: 18px; }
+            .record-counter { font-size: 13px; }
+            main { display: block; padding: 12px 10px 104px; }
+            .panel { padding: 14px 12px; margin-bottom: 12px; }
+            .toolbar { align-items: stretch; }
+            .timer { display: flex; align-items: center; }
+            .dish { min-height: 82px; grid-template-columns: 34px 56px minmax(0, 1fr) 40px 40px; gap: 7px; padding: 7px 5px; }
+            .dish img { width: 56px; height: 56px; }
+            .dish-name { font-size: 15px; }
+            .dish-meta { font-size: 12px; }
+            .move { width: 38px; height: 42px; }
+            .save-row { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; margin: 0; padding: 10px; background: rgba(255,255,255,.96); border-top: 1px solid var(--line); }
+        }
+    </style>
+    <script src="oracle-spring-api-client.js"></script>
+    <script defer src="scheduler-simulator.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="back" href="kitchen.html" aria-label="KDSへ戻る" title="KDSへ戻る">←</a>
+            <h1>調理順シミュレーター</h1>
+            <div class="record-counter"><span id="record-count">0</span>件記録</div>
+        </div>
+    </header>
+
+    <main>
+        <section class="panel" aria-labelledby="scenario-heading">
+            <h2 id="scenario-heading">先に着手する順へ並べ替え</h2>
+            <p class="subtle">加熱中に別の料理を準備できる前提で、厨房で作業を始める順番を決めます。</p>
+
+            <div class="toolbar">
+                <div class="segmented" aria-label="出題数">
+                    <button type="button" data-count="3">3</button>
+                    <button type="button" data-count="4" class="active">4</button>
+                    <button type="button" data-count="5">5</button>
+                    <button type="button" data-count="6">6</button>
+                </div>
+                <button type="button" class="secondary" id="new-scenario">新しい問題</button>
+                <span class="timer" id="timer">00:00</span>
+            </div>
+
+            <div class="scenario-list" id="scenario-list">
+                <div class="loading">メニューを読み込んでいます</div>
+            </div>
+
+            <div class="saved hidden" id="saved-message" role="status">この順序をCookieへ記録しました。</div>
+            <div class="save-row">
+                <button type="button" class="secondary" id="shuffle-order">順番を混ぜる</button>
+                <button type="button" class="primary" id="save-order" disabled>この順序を記録</button>
+            </div>
+        </section>
+
+        <aside class="panel" aria-labelledby="records-heading">
+            <h2 id="records-heading">回答記録</h2>
+            <p class="subtle">記録はこのブラウザ内だけに保存されます。</p>
+            <div class="stats">
+                <div class="stat"><strong id="total-runs">0</strong><span>回答回数</span></div>
+                <div class="stat"><strong id="average-time">--</strong><span>平均時間</span></div>
+            </div>
+            <button type="button" class="primary export" id="export-json" disabled>JSONをエクスポート</button>
+            <div class="history" id="history"></div>
+        </aside>
+    </main>
+</body>
+</html>
