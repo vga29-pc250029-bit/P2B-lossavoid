@@ -1,50 +1,32 @@
 package jp.co.lossvoid.controller.admin;
 
-import jp.co.lossvoid.bean.*;
-import jp.co.lossvoid.form.*;
-import jp.co.lossvoid.repository.*;
-import jp.co.lossvoid.service.*;
-import jakarta.validation.Valid;
-import java.util.List;
-import java.util.Map;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
+@RequestMapping("/staff/orders")
 public class StaffOrderController {
-    private final MenuRepository menuRepository;
-    public StaffOrderController(MenuRepository menuRepository) {
-        this.menuRepository = menuRepository;
+
+    // 卓番・人数登録画面を表示
+    @GetMapping
+    public String showOrderRegister() {
+        return "staff/table-register";
     }
 
-    @GetMapping({"/admin", "/admin.html"})
-    public String home() { return "customer/top"; }
+    // 卓番・人数を登録してメニュー一覧へ進む
+    @PostMapping("/start")
+    public String startOrder(
+            @RequestParam("tableNo") String tableNo,
+            @RequestParam("numberOfPeople") int numberOfPeople,
+            Model model) {
 
-    @GetMapping({"/admin/orders/new", "/Order.html"})
-    public String order() { return "customer/staff-order"; }
+        model.addAttribute("tableNo", tableNo);
+        model.addAttribute("numberOfPeople", numberOfPeople);
 
-    @GetMapping("/admin/orders/cart")
-    public String cart() { return "customer/staff-cart"; }
-
-    @GetMapping("/admin/orders/confirm")
-    public String confirm() { return "customer/order-confirm"; }
-
-    @GetMapping("/admin/stock")
-    public String stock() { return "customer/stock"; }
-
-    @GetMapping("/admin/allergens")
-    public String allergens() { return "customer/allergens"; }
-
-    @GetMapping("/admin/staff/confirm")
-    public String staffConfirm() { return "customer/staff-confirm"; }
-
-    @PatchMapping("/api/menus/{menuCode}/stock")
-    @ResponseBody
-    public Map<String, Boolean> updateStock(@PathVariable String menuCode, @RequestBody Map<String, Object> body) {
-        Integer stockQty = body.get("stockQty") == null ? null : Number.class.cast(body.get("stockQty")).intValue();
-        Boolean soldOut = body.get("soldOut") == null ? null : Boolean.class.cast(body.get("soldOut"));
-        menuRepository.updateStock(menuCode, stockQty, soldOut);
-        return Map.of("ok", true);
+        return "staff/menu-list";
     }
 }
