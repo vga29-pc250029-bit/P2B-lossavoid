@@ -1,6 +1,5 @@
 const SPRING_API_BASE_URL = window.ORDER_API_BASE_URL || (() => {
-    const url = new URL(location.protocol === "file:" ? "http://localhost" : location.origin);
-    url.port = "8080";
+    const url = new URL(location.protocol === "file:" ? "http://localhost:9999" : location.origin);
     url.pathname = "/api";
     return url.href.replace(/\/$/, "");
 })();
