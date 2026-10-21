@@ -1,5 +1,26 @@
 package jp.co.lossvoid.controller.kitchen;
 
-public class TableStatusController {
+import jp.co.lossvoid.bean.*;
+import jp.co.lossvoid.form.*;
+import jp.co.lossvoid.repository.*;
+import jp.co.lossvoid.service.*;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
 
+@Controller
+public class TableStatusController {
+    private final OrderService orderService;
+    public TableStatusController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    @GetMapping("/kitchen/tables")
+    public String tables(Model model) {
+        model.addAttribute("orders", orderService.getKitchenOrders());
+        return "kitchen/table-status";
+    }
 }
