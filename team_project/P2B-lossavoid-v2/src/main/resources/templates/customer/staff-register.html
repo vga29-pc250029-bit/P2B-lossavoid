@@ -1,10 +1,37 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>Insert title here</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注文登録</title>
 </head>
 <body>
+
+    <h1>注文登録</h1>
+
+    <form action="/staff/orders/start" method="post">
+
+        <div>
+            <label for="tableNo">テーブル番号：</label>
+            <input type="text" id="tableNo" name="tableNo" required>
+        </div>
+
+        <br>
+
+        <div>
+            <label for="numberOfPeople">人数：</label>
+            <input type="number"
+                   id="numberOfPeople"
+                   name="numberOfPeople"
+                   min="1"
+                   required>
+        </div>
+
+        <br>
+
+        <button type="submit">注文を開始</button>
+
+    </form>
 
 </body>
 </html>
