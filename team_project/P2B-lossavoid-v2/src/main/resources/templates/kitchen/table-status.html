@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テーブル状況</title>
+    <link rel="stylesheet" href="/css/v2-pages.css">
+</head>
+<body class="v2-document">
+<header><h1>テーブル状況</h1></header>
+<nav class="v2-links"><a href="/kitchen">KDS</a><a href="/kitchen/served">提供済み</a><a href="/kitchen/tables">更新</a></nav>
+<main>
+    <div class="v2-table-wrap">
+        <table>
+            <thead><tr><th>卓番</th><th>伝票番号</th><th>人数</th><th>注文日時</th><th>状態</th><th>詳細</th></tr></thead>
+            <tbody>
+                <tr th:if="${#lists.isEmpty(orders)}"><td colspan="6">現在の注文はありません</td></tr>
+                <tr th:each="order : ${orders}">
+                    <td th:text="${order.table}"></td><td th:text="${order.id}"></td>
+                    <td th:text="${order.guestCount ?: '-'}"></td><td th:text="${order.createdAt}"></td>
+                    <td th:text="${order.status}"></td>
+                    <td><a th:href="@{/kitchen/orders/{id}(id=${order.id})}">注文詳細</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+</body>
+</html>
