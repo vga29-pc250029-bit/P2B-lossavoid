@@ -1,5 +1,6 @@
 package jp.co.lossvoid.controller.admin;
 
+<<<<<<< HEAD
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,4 +21,38 @@ public class StaffRegistrationController {
     public String registerStaff() {
         return "customer/staff-confirm";
     }
+=======
+import jp.co.lossvoid.bean.*;
+import jp.co.lossvoid.form.*;
+import jp.co.lossvoid.repository.*;
+import jp.co.lossvoid.service.*;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+
+@Controller
+public class StaffRegistrationController {
+    private final StaffService staffService;
+    public StaffRegistrationController(StaffService staffService) {
+        this.staffService = staffService;
+    }
+
+    @GetMapping("/admin/staff")
+    public String list() { return "customer/staff-list"; }
+
+    @GetMapping("/admin/staff/register")
+    public String register() { return "customer/staff-register"; }
+
+    @GetMapping("/api/staff")
+    @ResponseBody
+    public List<StaffDto> listStaff() { return staffService.getStaff(); }
+
+    @PostMapping("/api/staff")
+    @ResponseBody
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public StaffDto create(@Valid @RequestBody StaffRequest request) { return staffService.createStaff(request); }
+>>>>>>> a8fb4dabd44473bfed3e327e7fbdc663c5f69fba
 }

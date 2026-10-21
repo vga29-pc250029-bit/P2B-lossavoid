@@ -1,10 +1,34 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title>Insert title here</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>注文詳細</title>
+<link rel="stylesheet" href="/css/v2-pages.css">
 </head>
-<body>
-
+<body class="v2-document">
+<header><h1>注文詳細</h1></header>
+<nav class="v2-links"><a href="/kitchen">KDS</a><a href="/kitchen/tables">卓状況</a></nav>
+<main>
+    <dl>
+        <dt>伝票番号</dt><dd th:text="${order.id}"></dd>
+        <dt>卓番</dt><dd th:text="${order.table}"></dd>
+        <dt>人数</dt><dd th:text="${order.guestCount ?: '-'}"></dd>
+        <dt>注文日時</dt><dd th:text="${order.createdAt}"></dd>
+        <dt>注文方法</dt><dd th:text="${order.orderMethod}"></dd>
+    </dl>
+    <div class="v2-table-wrap">
+        <table>
+            <thead><tr><th>商品</th><th>単価</th><th>個数</th><th>調理状態</th><th>提供状態</th></tr></thead>
+            <tbody>
+                <tr th:each="item : ${order.items}">
+                    <td th:text="${item.name}"></td><td th:text="${item.price}"></td>
+                    <td th:text="${item.qty}"></td><td th:text="${item.cookStatus}"></td>
+                    <td th:text="${item.served ? '提供済み' : '未提供'}"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
 </body>
 </html>

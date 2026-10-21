@@ -1,10 +1,58 @@
 <!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Insert title here</title>
-</head>
-<body>
-
-</body>
-</html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>注文履歴</title><link href="/css/customer.css" rel="stylesheet"/><link href="/css/v2-pages.css" rel="stylesheet"/></head><body class="flex flex-col" data-page="view-history"><div class="page" id="view-history">
+<div class="header-green">
+<span class="title"><i class="fa-solid fa-receipt" style="margin-right:6px;"></i>注文履歴</span>
+<button class="table-chip guest-edit" onclick="openGuestEntry()" title="人数を変更" type="button"><span id="table-chip3">卓番 未設定</span><i aria-hidden="true" class="fa-solid fa-pen"></i></button>
+</div>
+<div class="flex-1 overflow-y-auto p-3">
+<div id="orderContainer"></div>
+<div class="text-center text-gray-400 mt-20" id="history-empty">
+<div style="font-size:44px;margin-bottom:10px;">📋</div>
+            まだ注文履歴はありません
+        </div>
+</div>
+</div><nav aria-label="注文メニュー" class="grid grid-cols-5 border-t border-gray-300 bg-white footer-nav hidden" id="order-navigation">
+<button class="nav-btn" id="nav-add" onclick="showPage('view-menu')"><i class="fa-solid fa-utensils"></i><span>メニュー</span></button>
+<button class="nav-btn" id="nav-cart" onclick="showPage('view-cart')">
+<div class="cart-badge hidden" id="cart-badge">0</div>
+<i class="fa-solid fa-basket-shopping"></i><span>注文かご</span>
+</button>
+<button class="nav-btn" id="nav-history" onclick="showPage('view-history')"><i class="fa-solid fa-receipt"></i><span>注文履歴</span></button>
+<button class="nav-btn" onclick="callStaff()"><i class="fa-solid fa-bell-concierge"></i><span>店員呼出</span></button>
+<button class="nav-btn" onclick="showToast('レジにてお会計をお願いします')"><i class="fa-solid fa-cash-register"></i><span>会計する</span></button>
+</nav><div id="info-overlay" onclick="if(event.target===this) closeInfoModal()">
+<section aria-labelledby="info-item-name" aria-modal="true" id="info-modal" role="dialog">
+<div class="info-modal-header">
+            商品情報
+            <button aria-label="閉じる" class="info-close-btn" onclick="closeInfoModal()" type="button"><i aria-hidden="true" class="fa-solid fa-xmark"></i></button>
+</div>
+<div class="info-modal-body">
+<div class="info-photo" id="info-item-photo">🍴</div>
+<div class="info-name-box" id="info-item-name">商品名</div>
+<div class="info-allergy-box">
+<div class="info-allergy-title"><i aria-hidden="true" class="fa-solid fa-triangle-exclamation"></i> アレルギー情報</div>
+<div class="info-allergy-value" id="info-item-allergens" role="status">取得中...</div>
+<div class="info-match-note" id="info-match-note"></div>
+</div>
+<div class="info-source-note">
+                最新情報や製造工程上の注意事項は、注文前に
+                <a href="https://allergy.saizeriya.co.jp/allergy" rel="noopener noreferrer" target="_blank">サイゼリヤ公式アレルゲン検索</a>
+                または店舗スタッフへご確認ください。
+            </div>
+</div>
+</section>
+</div><div id="qty-overlay" onclick="if(event.target===this) closeQtyModal()">
+<div id="qty-modal">
+<div class="item-title" id="modal-item-name"></div>
+<div class="item-price" id="modal-item-price"></div>
+<div class="qty-row">
+<button class="qty-btn" onclick="changeModalQty(-1)" style="width:3rem;height:3rem;font-size:1.5rem;">−</button>
+<div class="qty-num" id="modal-qty-display">1</div>
+<button class="qty-btn" onclick="changeModalQty(1)" style="width:3rem;height:3rem;font-size:1.5rem;">＋</button>
+</div>
+<div class="modal-btns">
+<button class="btn-green" onclick="closeQtyModal()">キャンセル</button>
+<button class="btn-red" onclick="confirmAddToCart()">注文かごへ追加</button>
+</div>
+</div>
+</div><div id="toast"></div><script src="/oracle-spring-api-client.js"></script><script src="/js/customer.js"></script></body></html>
