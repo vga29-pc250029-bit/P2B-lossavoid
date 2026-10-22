@@ -19,7 +19,7 @@ public class BasicLogoutBarrierFilter extends OncePerRequestFilter {
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
-        String path = request.getRequestURI();
+        String path = request.getServletPath();
         boolean loginPage = "/admin.html".equals(path) || "/admin".equals(path)
             || path.startsWith("/admin/") || "/staff/login".equals(path);
         if (loginPage && hasLogoutCookie(request)) {
@@ -28,7 +28,9 @@ public class BasicLogoutBarrierFilter extends OncePerRequestFilter {
             response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
             response.addHeader(
                 HttpHeaders.SET_COOKIE,
-                COOKIE_NAME + "=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict"
+                COOKIE_NAME + "=; Max-Age=0; Path="
+                    + (request.getContextPath().isEmpty() ? "/" : request.getContextPath())
+                    + "; HttpOnly; SameSite=Strict"
             );
             return;
         }

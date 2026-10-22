@@ -23,5 +23,11 @@ public class MenuListController {
 
     @GetMapping("/api/menus")
     @ResponseBody
-    public List<MenuDto> getMenus() { return menuRepository.findAll(); }
+    public List<MenuDto> getMenus(jakarta.servlet.http.HttpServletRequest request) {
+        String contextPath = request.getContextPath();
+        return menuRepository.findAll().stream().map(menu -> new MenuDto(
+            menu.code(), menu.name(), menu.price(), menu.category(), menu.prepStation(), menu.cookTime(),
+            contextPath + menu.imageUrl(), menu.stockQty(), menu.soldOut(), menu.allergens()
+        )).toList();
+    }
 }

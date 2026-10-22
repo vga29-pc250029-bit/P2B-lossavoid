@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 
-<html lang="ja">
-<head>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>ログアウト</title>
@@ -55,10 +55,9 @@
             loginButton.disabled = true;
             loginButton.textContent = '認証画面を準備中...';
             try {
-                await fetch('/api/auth/logout', { method: 'POST', cache: 'no-store' });
+                await fetch(window.orderAppPath('/api/auth/logout'), { method: 'POST', cache: 'no-store' });
             } finally {
-                const cleanOrigin = `${location.protocol}//${location.host}`;
-                window.location.assign(`${cleanOrigin}/staff/login?login=${Date.now()}`);
+                window.location.assign(window.orderAppPath('/staff/login') + `?login=${Date.now()}`);
                 setTimeout(() => {
                     loginButton.disabled = false;
                     loginButton.textContent = 'ログイン画面へ';

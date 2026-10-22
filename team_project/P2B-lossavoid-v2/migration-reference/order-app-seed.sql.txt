@@ -1,3 +1,4 @@
+-- Legacy ORDER_APP data. Do not run this against lossavoid.
 DECLARE
     column_count NUMBER;
 BEGIN

@@ -1,6 +1,8 @@
 package jp.co.lossvoid;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
@@ -10,7 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDateTime;
 import java.util.List;
+import jakarta.servlet.http.Cookie;
+import jp.co.lossvoid.bean.MenuDto;
 import jp.co.lossvoid.bean.OrderDto;
+import jp.co.lossvoid.config.BasicLogoutBarrierFilter;
 import jp.co.lossvoid.config.SecurityConfig;
 import jp.co.lossvoid.repository.MenuRepository;
 import jp.co.lossvoid.repository.OrderRepository;
@@ -84,5 +89,62 @@ class MigrationRoutesTest {
         mvc.perform(patch("/api/orders/1/items/2/cancel-one").with(user("T001").roles("EMPLOYEE")))
             .andExpect(status().isOk());
         verify(orderService).cancelOneItem(1L, 2L);
+    }
+
+    @Test
+    void rejectsMenuCodesAndPricesOutsideTheNativeNumberTypes() throws Exception {
+        mvc.perform(post("/api/orders").contentType("application/json").content("""
+            {"table":"01","guestCount":2,"orderMethod":"SELF",
+             "items":[{"code":"not-a-number","name":"Doria","price":300,"qty":1}]}
+            """)).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/orders").contentType("application/json").content("""
+            {"table":"01","guestCount":2,"orderMethod":"SELF",
+             "items":[{"code":"2101","name":"Doria","price":100000000,"qty":1}]}
+            """)).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rendersAssetsAndNavigationWithinTheContextPath() throws Exception {
+        mvc.perform(get("/lossavoid/customer/table").contextPath("/lossavoid"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("content=\"/lossavoid/\"")))
+            .andExpect(content().string(containsString("src=\"/lossavoid/js/app-path.js\"")))
+            .andExpect(content().string(containsString("href=\"/lossavoid/css/customer.css\"")))
+            .andExpect(content().string(not(containsString("<<<<<<<"))));
+        mvc.perform(get("/lossavoid/admin/staff/register").contextPath("/lossavoid")
+                .with(user("admin").roles("SYSTEM_ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("id=\"staff-reg-password\"")))
+            .andExpect(content().string(not(containsString("<<<<<<<"))));
+    }
+
+    @Test
+    void menuImageUrlsIncludeTheContextPath() throws Exception {
+        when(menuRepository.findAll()).thenReturn(List.of(new MenuDto(
+            "2101", "Doria", 300, "rice", "kitchen", 6,
+            "/images/2101.png", 10, false, List.of("milk"))));
+        mvc.perform(get("/lossavoid/api/menus").contextPath("/lossavoid"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].imageUrl").value("/lossavoid/images/2101.png"));
+    }
+
+    @Test
+    void logoutForcesAChallengeWithinTheContextPath() throws Exception {
+        mvc.perform(post("/lossavoid/api/auth/logout").contextPath("/lossavoid"))
+            .andExpect(status().isNoContent())
+            .andExpect(header().string("Set-Cookie", containsString("Path=/lossavoid;")));
+        mvc.perform(get("/lossavoid/admin").contextPath("/lossavoid").servletPath("/admin")
+                .with(user("admin").roles("SYSTEM_ADMIN"))
+                .cookie(new Cookie(BasicLogoutBarrierFilter.COOKIE_NAME, "1")))
+            .andExpect(status().isUnauthorized())
+            .andExpect(header().string("WWW-Authenticate", containsString("Order Admin Login")))
+            .andExpect(cookie().path(BasicLogoutBarrierFilter.COOKIE_NAME, "/lossavoid"))
+            .andExpect(cookie().maxAge(BasicLogoutBarrierFilter.COOKIE_NAME, 0));
+    }
+
+    @Test
+    void preservesTheRegistrationConfirmationRoute() throws Exception {
+        mvc.perform(post("/admin/staff/register").with(user("admin").roles("SYSTEM_ADMIN")))
+            .andExpect(status().isOk()).andExpect(view().name("customer/staff-confirm"));
     }
 }

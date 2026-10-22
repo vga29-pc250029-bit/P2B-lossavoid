@@ -18,10 +18,10 @@ public class MenuRepository {
 
     public List<MenuDto> findAll() {
         return jdbcTemplate.query("""
-            SELECT MENU_CODE, MENU_NAME, PRICE, CATEGORY, PREP_STATION, COOK_TIME_MIN,
-                   STOCK_QTY, SOLD_OUT, ALLERGENS
-            FROM MENU_MASTER
-            ORDER BY MENU_CODE
+            SELECT TO_CHAR(MENU_ID) AS MENU_CODE, MENU_NAME, PRICE, CATEGORY, PREP_STATION,
+                   STANDARD_COOK_TIME AS COOK_TIME_MIN, STOCK_QTY, SOLD_OUT, ALLERGY_INFO AS ALLERGENS
+            FROM MENUS
+            ORDER BY MENU_ID
             """, (rs, rowNum) -> new MenuDto(
                 rs.getString("MENU_CODE"),
                 rs.getString("MENU_NAME"),
@@ -42,11 +42,11 @@ public class MenuRepository {
 
     public void updateStock(String menuCode, Integer stockQty, Boolean soldOut) {
         jdbcTemplate.update("""
-            UPDATE MENU_MASTER
+            UPDATE MENUS
             SET STOCK_QTY = COALESCE(?, STOCK_QTY),
                 SOLD_OUT = COALESCE(?, SOLD_OUT)
-            WHERE MENU_CODE = ?
-            """, stockQty, soldOut == null ? null : soldOut ? 1 : 0, menuCode);
+            WHERE MENU_ID = ?
+            """, stockQty, soldOut == null ? null : soldOut ? 1 : 0, Long.parseLong(menuCode));
     }
 
     private List<String> splitAllergens(String value) {
