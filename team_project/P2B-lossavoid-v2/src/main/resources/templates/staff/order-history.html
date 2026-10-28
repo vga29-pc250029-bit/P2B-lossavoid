@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>注文履歴</title><link href="/css/customer.css" rel="stylesheet"/><link href="/css/v2-pages.css" rel="stylesheet"/></head><body class="flex flex-col" data-page="view-history"><div class="page" id="view-history">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet" th:href="@{/guest-entry.css}"/><script src="https://cdn.tailwindcss.com"></script><title>注文履歴</title><link href="/css/customer.css" rel="stylesheet" th:href="@{/css/customer.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-history"><div class="page" id="view-history">
 <div class="header-green">
 <span class="title"><i class="fa-solid fa-receipt" style="margin-right:6px;"></i>注文履歴</span>
 <button class="table-chip guest-edit" onclick="openGuestEntry()" title="人数を変更" type="button"><span id="table-chip3">卓番 未設定</span><i aria-hidden="true" class="fa-solid fa-pen"></i></button>
@@ -55,4 +56,4 @@
 <button class="btn-red" onclick="confirmAddToCart()">注文かごへ追加</button>
 </div>
 </div>
-</div><div id="toast"></div><script src="/oracle-spring-api-client.js"></script><script src="/js/customer.js"></script></body></html>
+</div><div id="toast"></div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/customer.js" th:src="@{/js/customer.js}"></script></body></html>

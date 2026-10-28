@@ -1,17 +1,18 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>担当者ログイン</title>
-<link rel="stylesheet" href="/css/v2-pages.css">
+<link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/>
 </head>
 <body class="v2-document">
 <header><h1>担当者ログイン</h1></header>
 <main>
-    <p>ログインしました。</p>
-    <a class="command" href="/admin">管理画面を開く</a>
-    <a class="command" href="/customer/table">お客様の注文画面</a>
+<p>ログインしました。</p>
+<a class="command" href="/admin" th:href="@{/admin}">管理画面を開く</a>
+<a class="command" href="/customer/table" th:href="@{/customer/table}">お客様の注文画面</a>
 </main>
 </body>
 </html>

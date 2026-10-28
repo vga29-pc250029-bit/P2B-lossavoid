@@ -18,9 +18,11 @@ public class LogoutController {
     public String logoutPage() { return "staff/logout"; }
 
     @PostMapping("/api/auth/logout")
-    public org.springframework.http.ResponseEntity<Void> logout(jakarta.servlet.http.HttpServletResponse response) {
+    public org.springframework.http.ResponseEntity<Void> logout(
+            jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) {
+        String cookiePath = request.getContextPath().isEmpty() ? "/" : request.getContextPath();
         response.addHeader("Set-Cookie", jp.co.lossvoid.config.BasicLogoutBarrierFilter.COOKIE_NAME
-            + "=1; Max-Age=120; Path=/; HttpOnly; SameSite=Strict");
+            + "=1; Max-Age=120; Path=" + cookiePath + "; HttpOnly; SameSite=Strict");
         return org.springframework.http.ResponseEntity.noContent().header("Cache-Control", "no-store").build();
     }
 }

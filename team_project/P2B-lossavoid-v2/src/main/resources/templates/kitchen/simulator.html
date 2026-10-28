@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 
-<html lang="ja">
-<head>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>KDS 調理順シミュレーター</title>
@@ -79,13 +79,13 @@
             .save-row { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; margin: 0; padding: 10px; background: rgba(255,255,255,.96); border-top: 1px solid var(--line); }
         }
     </style>
-<script src="/oracle-spring-api-client.js"></script>
-<script defer="" src="/scheduler-simulator.js"></script>
+<script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
+<script defer="" src="/scheduler-simulator.js" th:src="@{/scheduler-simulator.js}"></script>
 </head>
 <body>
 <header class="topbar">
 <div class="topbar-inner">
-<a aria-label="KDSへ戻る" class="back" href="/kitchen" title="KDSへ戻る">←</a>
+<a aria-label="KDSへ戻る" class="back" href="/kitchen" th:href="@{/kitchen}" title="KDSへ戻る">←</a>
 <h1>調理順シミュレーター</h1>
 <div class="record-counter"><span id="record-count">0</span>件記録</div>
 </div>

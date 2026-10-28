@@ -4,21 +4,40 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
-@RequestMapping("/staff/orders")
 public class StaffOrderController {
 
+    @GetMapping({"/admin", "/admin.html", "/Order.html"})
+    public String home() { return "customer/top"; }
+
+    @GetMapping("/admin/orders/new")
+    public String order() { return "customer/staff-order"; }
+
+    @GetMapping("/admin/orders/cart")
+    public String cart() { return "customer/staff-cart"; }
+
+    @GetMapping("/admin/orders/confirm")
+    public String confirm() { return "customer/order-confirm"; }
+
+    @GetMapping("/admin/stock")
+    public String stock() { return "customer/stock"; }
+
+    @GetMapping("/admin/allergens")
+    public String allergens() { return "customer/allergens"; }
+
+    @GetMapping("/admin/staff/confirm")
+    public String staffConfirm() { return "customer/staff-confirm"; }
+
     // 卓番・人数登録画面を表示
-    @GetMapping
+    @GetMapping("/staff/orders")
     public String showOrderRegister() {
         return "staff/table-register";
     }
 
     // 卓番・人数を登録してメニュー一覧へ進む
-    @PostMapping("/start")
+    @PostMapping("/staff/orders/start")
     public String startOrder(
             @RequestParam("tableNo") String tableNo,
             @RequestParam("numberOfPeople") int numberOfPeople,

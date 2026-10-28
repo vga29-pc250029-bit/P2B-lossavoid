@@ -61,7 +61,7 @@
                     cookTime: data.cookTime
                 };
             });
-            console.log("Oracle MENU_MASTER読込完了", cookMap);
+            console.log("Oracle MENUS読込完了", cookMap);
         }
 
         await loadCookList();
@@ -381,7 +381,7 @@
         }
 
         // 「所定時間の±」列の表示整形
-        // 所定所要時間(分) = Oracle MENU_MASTERのCOOK_TIME_MIN。
+        // 所定所要時間(分) = Oracle MENUSのSTANDARD_COOK_TIME。
         // 所定提供予定時刻 = 注文時刻(createdAt) + cookTime分
         // ±差 = 実際の提供時刻(hiddenAt) - 所定提供予定時刻
         //   ・所定より遅い(提供が遅れた) → "+"（赤色）
@@ -562,4 +562,4 @@
             if (row) row.remove();
         });
     
-if (location.pathname === '/kitchen/served') { servedModal.classList.remove('hidden'); renderServedTable(); }
+if (window.orderAppRoute() === '/kitchen/served') { servedModal.classList.remove('hidden'); renderServedTable(); }

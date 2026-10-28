@@ -1,5 +1,6 @@
 package jp.co.lossvoid.controller.admin;
 
+<<<<<<< HEAD
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,8 @@ public class StaffRegistrationController {
         return "customer/staff-confirm";
     }
 =======
+=======
+>>>>>>> c629c30115ca3586bbd56df87536805fd66e6ab9
 import jp.co.lossvoid.bean.*;
 import jp.co.lossvoid.form.*;
 import jp.co.lossvoid.repository.*;
@@ -45,6 +48,9 @@ public class StaffRegistrationController {
 
     @GetMapping("/admin/staff/register")
     public String register() { return "customer/staff-register"; }
+
+    @PostMapping("/admin/staff/register")
+    public String registerStaff() { return "customer/staff-confirm"; }
 
     @GetMapping("/api/staff")
     @ResponseBody

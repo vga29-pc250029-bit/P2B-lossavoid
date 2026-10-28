@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>注文かご</title><link href="/css/admin.css" rel="stylesheet"/><link href="/css/v2-pages.css" rel="stylesheet"/></head><body class="flex flex-col" data-page="view-cart"><div class="page" id="view-cart">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>注文かご</title><link href="/css/admin.css" rel="stylesheet" th:href="@{/css/admin.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-cart"><div class="page" id="view-cart">
 <div class="header-blue">
 <div class="title-wrap">
 <button class="home-btn" onclick="showPage('view-home')"><i class="fa-solid fa-house"></i></button>
@@ -38,7 +39,7 @@
 </div>
 <div class="flex justify-center space-x-3">
 <button class="btn-blue flex-1" onclick="showPage('view-menu')"><i class="fa-solid fa-plus"></i> 追加で選ぶ</button>
-<button class="btn-red flex-1" id="submit-btn" onclick="location.assign('/admin/orders/confirm')">注文内容を確認</button>
+<button class="btn-red flex-1" id="submit-btn" onclick="location.assign(window.orderAppPath('/admin/orders/confirm'))">注文内容を確認</button>
 </div>
 </div>
 </div><div class="grid grid-cols-2 border-t border-gray-300 bg-white footer-nav hidden" id="footer-nav">
@@ -64,4 +65,4 @@
 </div><div id="toast"></div><div id="loading-overlay">
 <div class="spinner"></div>
 <div style="font-size:14px;color:#666;font-weight:700;">読み込み中...</div>
-</div><script src="/oracle-spring-api-client.js"></script><script src="/js/admin.js"></script></body></html>
+</div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/admin.js" th:src="@{/js/admin.js}"></script></body></html>

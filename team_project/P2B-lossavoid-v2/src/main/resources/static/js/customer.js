@@ -223,7 +223,7 @@ window.addEventListener('pagehide', saveCustomerState);
                 icon: categoryMeta[category]?.icon || '🍴',
                 prepStation: data.prepStation || '',
                 cookTime: Number(data.cookTime) || 0,
-                imageUrl: data.imageUrl || `/images/${encodeURIComponent(data.name || data.shortName || '(名称未設定)')}.png`,
+                imageUrl: data.imageUrl || window.orderAppPath(`/images/${encodeURIComponent(data.name || data.shortName || '(名称未設定)')}.png`),
                 soldOut: !!data.soldOut,
                 stockQty: stockQty,
                 allergens: Array.isArray(data.allergens) ? data.allergens : []
@@ -364,7 +364,7 @@ window.addEventListener('pagehide', saveCustomerState);
 
     // ---- 数量選択モーダル ----
     function openQtyModal(code) {
-        if (!document.body.dataset.menuCode) { saveCustomerState(); location.assign('/customer/menu/' + encodeURIComponent(code) + '/quantity' + (tableNumber ? '#' + tableNumber : '')); return; }
+        if (!document.body.dataset.menuCode) { saveCustomerState(); location.assign(window.orderAppPath('/customer/menu/' + encodeURIComponent(code) + '/quantity') + (tableNumber ? '#' + tableNumber : '')); return; }
         if (!visitConfirmed || isSubmittingOrder) return;
         const item = menuData[code];
         if (!item || isOutOfStock(item)) {
@@ -427,9 +427,9 @@ window.addEventListener('pagehide', saveCustomerState);
         if (isSubmittingOrder) return;
         if (pageId !== 'view-guests' && !visitConfirmed) pageId = 'view-guests';
         const routes = {'view-guests':'/customer/table','view-menu':'/customer/menu','view-cart':'/customer/cart','view-history':'/customer/history'};
-        if ((!initial && routes[pageId] !== location.pathname) || !document.getElementById(pageId)) {
+        if ((!initial && routes[pageId] !== window.orderAppRoute()) || !document.getElementById(pageId)) {
             saveCustomerState();
-            location.assign(routes[pageId] + (tableNumber ? '#' + tableNumber : ''));
+            location.assign(window.orderAppPath(routes[pageId]) + (tableNumber ? '#' + tableNumber : ''));
             return;
         }
         currentPage = pageId;

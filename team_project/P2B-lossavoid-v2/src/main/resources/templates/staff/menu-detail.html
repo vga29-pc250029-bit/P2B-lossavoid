@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>商品詳細</title><link href="/css/customer.css" rel="stylesheet"/><link href="/css/v2-pages.css" rel="stylesheet"/></head><body class="flex flex-col" data-page="view-menu" th:attr="data-menu-code=${menuCode},data-quantity-mode=${quantityMode ?: false}"><div class="page" id="view-menu"><div class="header-red"><button class="btn-red" onclick="showPage('view-menu')">メニューに戻る</button></div></div><nav aria-label="注文メニュー" class="grid grid-cols-5 border-t border-gray-300 bg-white footer-nav hidden" id="order-navigation">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet" th:href="@{/guest-entry.css}"/><script src="https://cdn.tailwindcss.com"></script><title>商品詳細</title><link href="/css/customer.css" rel="stylesheet" th:href="@{/css/customer.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-menu" th:attr="data-menu-code=${menuCode},data-quantity-mode=${quantityMode ?: false}"><div class="page" id="view-menu"><div class="header-red"><button class="btn-red" onclick="showPage('view-menu')">メニューに戻る</button></div></div><nav aria-label="注文メニュー" class="grid grid-cols-5 border-t border-gray-300 bg-white footer-nav hidden" id="order-navigation">
 <button class="nav-btn" id="nav-add" onclick="showPage('view-menu')"><i class="fa-solid fa-utensils"></i><span>メニュー</span></button>
 <button class="nav-btn" id="nav-cart" onclick="showPage('view-cart')">
 <div class="cart-badge hidden" id="cart-badge">0</div>
@@ -43,4 +44,4 @@
 <button class="btn-red" onclick="confirmAddToCart()">注文かごへ追加</button>
 </div>
 </div>
-</div><div id="toast"></div><script src="/oracle-spring-api-client.js"></script><script src="/js/customer.js"></script></body></html>
+</div><div id="toast"></div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/customer.js" th:src="@{/js/customer.js}"></script></body></html>

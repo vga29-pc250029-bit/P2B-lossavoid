@@ -281,9 +281,9 @@ window.addEventListener('pagehide', saveStaffState);
             showToast('システム管理者のみ利用できます');
             return;
         }
-        if (!initial && routes[pageId] !== location.pathname) {
+        if (!initial && routes[pageId] !== window.orderAppRoute()) {
             saveStaffState();
-            location.assign(routes[pageId]);
+            location.assign(window.orderAppPath(routes[pageId]));
             return;
         }
         document.querySelectorAll('.page').forEach(p => p.classList.toggle('hidden', p.id !== pageId));
@@ -873,7 +873,7 @@ window.addEventListener('pagehide', saveStaffState);
     }
 
     // =====================================================================
-    // 担当者登録（Oracle STAFF_MASTER）
+    // 担当者登録（Oracle STAFFS）
     // =====================================================================
     let staffList = [];
     let editingStaffCode = '';
@@ -969,7 +969,7 @@ window.addEventListener('pagehide', saveStaffState);
     }
 
     function editStaff(encodedCode) {
-        if (document.body.dataset.staffMode !== 'update') { location.assign('/admin/staff/update?code=' + encodedCode); return; }
+        if (document.body.dataset.staffMode !== 'update') { location.assign(window.orderAppPath('/admin/staff/update') + '?code=' + encodedCode); return; }
         const code = decodeURIComponent(encodedCode);
         const staff = staffList.find(item => item.code === code);
         if (!staff) return;
@@ -1089,13 +1089,13 @@ window.addEventListener('pagehide', saveStaffState);
         const button = document.querySelector('.logout-btn');
         if (button) button.disabled = true;
         try {
-            await fetch('/api/auth/logout', { method: 'POST', cache: 'no-store' });
+            await fetch(window.orderAppPath('/api/auth/logout'), { method: 'POST', cache: 'no-store' });
         } catch (error) {
             console.debug('認証情報の破棄処理', error);
         } finally {
             localStorage.removeItem('staffCode');
             localStorage.removeItem('lastStaffCode');
-            window.location.replace(`${location.protocol}//${location.host}/staff/logout`);
+            window.location.replace(window.orderAppPath('/staff/logout'));
         }
     }
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>注文かご</title><link href="/css/customer.css" rel="stylesheet"/><link href="/css/v2-pages.css" rel="stylesheet"/></head><body class="flex flex-col" data-page="view-cart"><div class="page" id="view-cart">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet" th:href="@{/guest-entry.css}"/><script src="https://cdn.tailwindcss.com"></script><title>注文かご</title><link href="/css/customer.css" rel="stylesheet" th:href="@{/css/customer.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-cart"><div class="page" id="view-cart">
 <div class="header-green">
 <span class="title"><i class="fa-solid fa-basket-shopping" style="margin-right:6px;"></i>注文かご</span>
 <button class="table-chip guest-edit" onclick="openGuestEntry()" title="人数を変更" type="button"><span id="table-chip2">卓番 未設定</span><i aria-hidden="true" class="fa-solid fa-pen"></i></button>
@@ -14,7 +15,7 @@
 </div>
 <div class="flex justify-center space-x-3">
 <button class="btn-green flex-1" onclick="showPage('view-menu')"><i class="fa-solid fa-plus"></i> 追加で選ぶ</button>
-<button class="btn-red flex-1" id="submit-btn" onclick="location.assign('/customer/order/confirm' + location.hash)">注文内容を確認</button>
+<button class="btn-red flex-1" id="submit-btn" onclick="location.assign(window.orderAppPath('/customer/order/confirm') + location.hash)">注文内容を確認</button>
 </div>
 </div>
 </div><nav aria-label="注文メニュー" class="grid grid-cols-5 border-t border-gray-300 bg-white footer-nav hidden" id="order-navigation">
@@ -61,4 +62,4 @@
 <button class="btn-red" onclick="confirmAddToCart()">注文かごへ追加</button>
 </div>
 </div>
-</div><div id="toast"></div><script src="/oracle-spring-api-client.js"></script><script src="/js/customer.js"></script></body></html>
+</div><div id="toast"></div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/customer.js" th:src="@{/js/customer.js}"></script></body></html>

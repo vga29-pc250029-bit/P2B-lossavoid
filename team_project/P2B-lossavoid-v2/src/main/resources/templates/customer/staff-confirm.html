@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>登録済みメンバー確認</title><link href="/css/admin.css" rel="stylesheet"/><link href="/css/v2-pages.css" rel="stylesheet"/></head><body class="flex flex-col" data-page="view-staff" data-staff-mode="list"><div class="page" id="view-staff">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>登録済みメンバー確認</title><link href="/css/admin.css" rel="stylesheet" th:href="@{/css/admin.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-staff" data-staff-mode="list"><div class="page" id="view-staff">
 <div class="header-blue">
 <div class="title-wrap">
 <button class="home-btn" onclick="showPage('view-home')"><i class="fa-solid fa-house"></i></button>
 <span class="title"><i class="fa-solid fa-id-card" style="margin-right:6px;"></i>登録済みメンバー確認</span>
 </div>
 </div>
-<div class="sub-scroll"><div class="v2-links"><a href="/admin/staff">担当者一覧</a><a href="/admin/staff/register">担当者登録</a></div>
-
+<div class="sub-scroll"><div class="v2-links"><a href="/admin/staff" th:href="@{/admin/staff}">担当者一覧</a><a href="/admin/staff/register" th:href="@{/admin/staff/register}">担当者登録</a></div>
 <div class="sub-card">
 <div class="staff-section-head">
 <span class="sub-label">登録済みメンバー</span>
@@ -39,4 +39,4 @@
 </div><div id="toast"></div><div id="loading-overlay">
 <div class="spinner"></div>
 <div style="font-size:14px;color:#666;font-weight:700;">読み込み中...</div>
-</div><script src="/oracle-spring-api-client.js"></script><script src="/js/admin.js"></script></body></html>
+</div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/admin.js" th:src="@{/js/admin.js}"></script></body></html>
