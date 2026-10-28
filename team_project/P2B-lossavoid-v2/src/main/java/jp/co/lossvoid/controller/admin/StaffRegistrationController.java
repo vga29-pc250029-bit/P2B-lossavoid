@@ -1,6 +1,6 @@
 package jp.co.lossvoid.controller.admin;
 
-<<<<<<< HEAD
+
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,5 +54,4 @@ public class StaffRegistrationController {
     @ResponseBody
     @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public StaffDto create(@Valid @RequestBody StaffRequest request) { return staffService.createStaff(request); }
->>>>>>> a8fb4dabd44473bfed3e327e7fbdc663c5f69fba
 }
