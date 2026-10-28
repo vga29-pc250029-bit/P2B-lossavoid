@@ -9,6 +9,7 @@ import jp.co.lossvoid.form.StatusUpdateRequest;
 import jp.co.lossvoid.form.TableChangeRequest;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -81,25 +82,84 @@ public class OrderRepository {
 
     @Transactional
     public void updateItemStatus(Long orderItemId, StatusUpdateRequest request) {
+        String requestedStatus = request.status().trim().toUpperCase(Locale.ROOT);
+
+        if ("KITCHEN_READY".equals(requestedStatus)) {
+            int updated = jdbcTemplate.update("""
+                UPDATE COOKING_TASKS
+                SET STATUS = 'KITCHEN_READY',
+                    END_TIME = COALESCE(END_TIME, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ?
+                  AND STATUS IN ('WAITING', 'COOKING', 'KITCHEN_READY')
+                """, orderItemId);
+            if (updated == 0) {
+                throw new IllegalStateException("The order item cannot be marked kitchen-ready from its current state");
+            }
+            return;
+        }
+
+        if ("FLOOR_PICKED".equals(requestedStatus)) {
+            int updated = jdbcTemplate.update("""
+                UPDATE COOKING_TASKS
+                SET STATUS = 'FLOOR_PICKED'
+                WHERE ORDER_DETAIL_ID = ?
+                  AND STATUS IN ('KITCHEN_READY', 'FLOOR_PICKED')
+                """, orderItemId);
+            if (updated == 0) {
+                throw new IllegalStateException("The order item must be kitchen-ready before floor pickup");
+            }
+            jdbcTemplate.update("""
+                UPDATE ORDER_DETAILS
+                SET SERVED = 1,
+                    SERVED_AT = COALESCE(SERVED_AT, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ?
+                """, orderItemId);
+            return;
+        }
+
+        // Backward compatibility for the former one-click KDS client.
+        if (("COMPLETED".equals(requestedStatus) || "DONE".equals(requestedStatus))
+                && Boolean.TRUE.equals(request.served())) {
+            jdbcTemplate.update("""
+                UPDATE COOKING_TASKS
+                SET STATUS = 'FLOOR_PICKED',
+                    END_TIME = COALESCE(END_TIME, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ? AND STATUS <> 'CANCELED'
+                """, orderItemId);
+            jdbcTemplate.update("""
+                UPDATE ORDER_DETAILS
+                SET SERVED = 1,
+                    SERVED_AT = COALESCE(SERVED_AT, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ?
+                """, orderItemId);
+            return;
+        }
+
+        if (!List.of("WAITING", "COOKING").contains(requestedStatus)) {
+            throw new IllegalArgumentException("Unsupported cooking status: " + requestedStatus);
+        }
+
+        int updated = jdbcTemplate.update("""
+            UPDATE COOKING_TASKS
+            SET STATUS = ?,
+                START_TIME = CASE WHEN ? = 'COOKING' THEN COALESCE(START_TIME, CURRENT_TIMESTAMP)
+                                  WHEN ? = 'WAITING' THEN NULL ELSE START_TIME END,
+                END_TIME = CASE WHEN ? = 'WAITING' THEN NULL ELSE END_TIME END
+            WHERE ORDER_DETAIL_ID = ?
+              AND STATUS IN ('WAITING', 'COOKING')
+            """, requestedStatus, requestedStatus, requestedStatus, requestedStatus, orderItemId);
+        if (updated == 0) {
+            throw new IllegalStateException(
+                "The order item cannot transition to " + requestedStatus + " from its current state");
+        }
+
         Integer served = request.served() == null ? null : request.served() ? 1 : 0;
         jdbcTemplate.update("""
             UPDATE ORDER_DETAILS
             SET SERVED = COALESCE(?, SERVED),
-                SERVED_AT = CASE
-                    WHEN ? = 1 THEN CURRENT_TIMESTAMP
-                    WHEN ? = 0 THEN NULL
-                    ELSE SERVED_AT
-                END
+                SERVED_AT = CASE WHEN ? = 0 AND ? = 'WAITING' THEN NULL ELSE SERVED_AT END
             WHERE ORDER_DETAIL_ID = ?
-            """, served, served, served, orderItemId);
-        jdbcTemplate.update("""
-            UPDATE COOKING_TASKS
-            SET STATUS = ?,
-                START_TIME = CASE WHEN ? = 'COOKING' THEN COALESCE(START_TIME, CURRENT_TIMESTAMP) ELSE START_TIME END,
-                END_TIME = CASE WHEN ? IN ('COMPLETED', 'DONE') THEN COALESCE(END_TIME, CURRENT_TIMESTAMP)
-                                WHEN ? = 'WAITING' THEN NULL ELSE END_TIME END
-            WHERE ORDER_DETAIL_ID = ?
-            """, request.status(), request.status(), request.status(), request.status(), orderItemId);
+            """, served, served, requestedStatus, orderItemId);
     }
 
     public void cancelOrder(Long orderId) {
@@ -187,13 +247,14 @@ public class OrderRepository {
         return jdbcTemplate.query("""
             SELECT d.ORDER_DETAIL_ID AS ORDER_ITEM_ID, TO_CHAR(d.MENU_ID) AS MENU_CODE,
                    d.MENU_NAME, d.PRICE, d.QUANTITY AS QTY, COALESCE(t.STATUS, 'WAITING') AS COOK_STATUS,
-                   d.SERVED, d.SERVED_AT, d.NOTE
+                   t.END_TIME AS KITCHEN_READY_AT, d.SERVED, d.SERVED_AT, d.NOTE
             FROM ORDER_DETAILS d LEFT JOIN COOKING_TASKS t ON t.ORDER_DETAIL_ID = d.ORDER_DETAIL_ID
             WHERE d.ORDER_ID = ? AND d.QUANTITY > 0 AND COALESCE(t.STATUS, 'WAITING') <> 'CANCELED'
             ORDER BY d.ORDER_DETAIL_ID
             """, (rs, rowNum) -> new OrderItemDto(
                 rs.getLong("ORDER_ITEM_ID"), rs.getString("MENU_CODE"), rs.getString("MENU_NAME"),
-                rs.getInt("PRICE"), rs.getInt("QTY"), rs.getString("COOK_STATUS"), rs.getInt("SERVED") == 1,
+                rs.getInt("PRICE"), rs.getInt("QTY"), rs.getString("COOK_STATUS"),
+                rs.getObject("KITCHEN_READY_AT", LocalDateTime.class), rs.getInt("SERVED") == 1,
                 rs.getObject("SERVED_AT", LocalDateTime.class), rs.getString("NOTE")
             ), orderId);
     }

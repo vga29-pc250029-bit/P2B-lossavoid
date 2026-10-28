@@ -1,62 +1,88 @@
 <!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta content="/" name="app-root" th:content="@{/}"/>
+    <script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>提供済み料理一覧</title>
+    <link href="/css/kitchen.css" rel="stylesheet" th:href="@{/css/kitchen.css}"/>
+    <link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/>
+</head>
+<body class="h-screen flex flex-col overflow-hidden" data-page="kitchen">
+<header class="header-bg kds-header border-b border-black">
+    <div class="header-actions">
+        <button class="btn-yellow" id="completed-btn">提供済</button>
+    </div>
+    <div class="header-status">
+        <div class="pickup-alert hidden" id="pickup-alert" aria-live="assertive"></div>
+        <div class="kds-message hidden" id="kds-message" aria-live="polite"></div>
+    </div>
+    <div class="header-actions right">
+        <button class="btn-yellow" id="delete-btn">整理結果を消す</button>
+        <button class="btn-yellow primary" id="organize-btn">整理</button>
+        <span class="current-time" id="current-time">hh:mm:ss</span>
+    </div>
+</header>
+<nav class="v2-links">
+    <a href="/kitchen" th:href="@{/kitchen}">KDS</a>
+    <a href="/kitchen/served" th:href="@{/kitchen/served}">提供済み</a>
+    <a href="/kitchen/tables" th:href="@{/kitchen/tables}">卓状況</a>
+    <a href="/kitchen/simulator" th:href="@{/kitchen/simulator}">シミュレーター</a>
+</nav>
+<main class="kds-workspace">
+    <section class="raw-panel">
+        <h1 class="panel-title">受信伝票 <small>確認専用</small></h1>
+        <div id="orderContainer"></div>
+    </section>
+    <section class="right-panel">
+        <h1 class="panel-title">整理後ワークフロー <small>左＝フロア持出し／右＝キッチン完成</small></h1>
+        <div id="organizedOrders"></div>
+    </section>
+</main>
 
-<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><script src="https://cdn.tailwindcss.com"></script><title>提供済み料理一覧</title><link href="/css/kitchen.css" rel="stylesheet" th:href="@{/css/kitchen.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="h-screen flex flex-col overflow-hidden" data-page="kitchen"><header class="header-bg p-1 flex justify-between items-center border-b border-black">
-<div class="flex space-x-2">
-<button class="btn-yellow px-4 py-1 font-bold" id="news-btn">速報</button>
-<button class="btn-yellow px-4 py-1 font-bold" id="completed-btn">提供済</button>
-<button class="btn-yellow px-4 py-1 font-bold" id="shift-btn">シフト確認</button>
+<div class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2" id="served-modal">
+    <div class="served-dialog">
+        <div class="header-bg served-dialog-header border-b border-black">
+            <h2>✅ 提供済み料理一覧</h2>
+            <button class="btn-yellow" id="served-modal-close">閉じる ✕</button>
+        </div>
+        <div class="served-filters">
+            <label>卓番フィルター:
+                <select id="served-filter-table"><option value="">すべての卓番</option></select>
+            </label>
+            <label>料理フィルター:
+                <select id="served-filter-dish"><option value="">すべての料理</option></select>
+            </label>
+            <span id="served-count">0 件</span>
+        </div>
+        <div class="served-table-wrap">
+            <table class="served-table">
+                <thead>
+                <tr>
+                    <th>卓番</th>
+                    <th>注文</th>
+                    <th>料理</th>
+                    <th>個数</th>
+                    <th>金額</th>
+                    <th>キッチン完成</th>
+                    <th>注文→キッチン<br><small>実績 / 標準調理差</small></th>
+                    <th>フロア持出し</th>
+                    <th>キッチン→フロア<br><small>実績 / 30秒差</small></th>
+                    <th>注文方法</th>
+                    <th>備考</th>
+                </tr>
+                </thead>
+                <tbody id="served-table-body"></tbody>
+            </table>
+        </div>
+    </div>
 </div>
-<div class="flex items-center space-x-4">
-<button class="btn-yellow px-6 py-1 font-bold" id="delete-btn">全消去</button>
-<button class="btn-yellow px-6 py-1 font-bold" id="organize-btn">整理</button>
-<span class="text-2xl font-mono" id="current-time">hh:mm:ss</span>
-</div>
-</header><nav class="v2-links"><a href="/kitchen" th:href="@{/kitchen}">KDS</a><a href="/kitchen/served" th:href="@{/kitchen/served}">提供済み</a><a href="/kitchen/tables" th:href="@{/kitchen/tables}">卓状況</a><a href="/kitchen/simulator" th:href="@{/kitchen/simulator}">シミュレーター</a></nav><div class="flex-1 flex overflow-hidden">
-<div class="w-1/2 p-1 overflow-y-auto border-r border-black">
-<div id="orderContainer"></div>
-</div>
-<div class="flex-1 right-panel p-1 overflow-y-auto">
-<div id="organizedOrders"></div>
-</div>
-</div><div class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" id="served-modal">
-<div class="bg-white w-full max-w-6xl max-h-[90vh] flex flex-col border-2 border-black">
-<div class="header-bg flex justify-between items-center p-3 border-b border-black">
-<h2 class="text-2xl font-bold">✅ 提供済み料理一覧</h2>
-<button class="btn-yellow px-4 py-1 font-bold text-xl" id="served-modal-close">閉じる ✕</button>
-</div>
-<div class="flex flex-wrap items-center gap-4 p-3 border-b border-gray-300 bg-gray-50">
-<label class="flex items-center gap-2 text-lg font-bold">
-                    卓番フィルター:
-                    <select class="border border-gray-400 px-2 py-1 text-lg" id="served-filter-table">
-<option value="">すべての卓番</option>
-</select>
-</label>
-<label class="flex items-center gap-2 text-lg font-bold">
-                    料理フィルター:
-                    <select class="border border-gray-400 px-2 py-1 text-lg" id="served-filter-dish">
-<option value="">すべての料理</option>
-</select>
-</label>
-<span class="ml-auto text-lg text-gray-600" id="served-count">0 件</span>
-</div>
-<div class="overflow-auto flex-1 p-2">
-<table class="w-full text-base border-collapse">
-<thead>
-<tr class="bg-yellow-100">
-<th class="border border-gray-300 px-2 py-2">卓番</th>
-<th class="border border-gray-300 px-2 py-2">注文時間</th>
-<th class="border border-gray-300 px-2 py-2">注文商品</th>
-<th class="border border-gray-300 px-2 py-2">注文個数</th>
-<th class="border border-gray-300 px-2 py-2">注文金額</th>
-<th class="border border-gray-300 px-2 py-2">提供時間</th>
-<th class="border border-gray-300 px-2 py-2">遅速(±)</th>
-<th class="border border-gray-300 px-2 py-2">注文方法</th>
-<th class="border border-gray-300 px-2 py-2">備考</th>
-</tr>
-</thead>
-<tbody id="served-table-body">
-</tbody>
-</table>
-</div>
-</div>
-</div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/kitchen-clock.js" th:src="@{/js/kitchen-clock.js}"></script><script src="/kitchen-scheduler.js" th:src="@{/kitchen-scheduler.js}"></script><script src="/js/kitchen.js" th:src="@{/js/kitchen.js}" type="module"></script></body></html>
+
+<script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
+<script src="/js/kitchen-clock.js" th:src="@{/js/kitchen-clock.js}"></script>
+<script src="/kitchen-scheduler.js" th:src="@{/kitchen-scheduler.js}"></script>
+<script src="/js/kitchen.js" th:src="@{/js/kitchen.js}" type="module"></script>
+</body>
+</html>

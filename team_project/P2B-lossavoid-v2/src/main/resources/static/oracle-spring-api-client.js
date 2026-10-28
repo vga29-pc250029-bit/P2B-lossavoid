@@ -98,6 +98,18 @@ window.oracleApi = {
             body: JSON.stringify({ status, served })
         });
     },
+    markKitchenReady(orderItemId) {
+        return springApi(`/kitchen/order-items/${orderItemId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "KITCHEN_READY" })
+        });
+    },
+    markFloorPicked(orderItemId) {
+        return springApi(`/kitchen/order-items/${orderItemId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "FLOOR_PICKED", served: true })
+        });
+    },
     updateStock(menuCode, stockQty, soldOut) {
         return springApi(`/menus/${encodeURIComponent(menuCode)}/stock`, {
             method: "PATCH",

@@ -9,6 +9,7 @@ public record OrderItemDto(
     Integer price,
     Integer qty,
     String cookStatus,
+    LocalDateTime kitchenReadyAt,
     Boolean served,
     LocalDateTime servedAt,
     String note

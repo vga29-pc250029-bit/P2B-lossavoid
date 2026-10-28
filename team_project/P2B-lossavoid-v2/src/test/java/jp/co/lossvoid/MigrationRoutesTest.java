@@ -17,6 +17,7 @@ import jp.co.lossvoid.bean.MenuDto;
 import jp.co.lossvoid.bean.OrderDto;
 import jp.co.lossvoid.config.BasicLogoutBarrierFilter;
 import jp.co.lossvoid.config.SecurityConfig;
+import jp.co.lossvoid.form.StatusUpdateRequest;
 import jp.co.lossvoid.repository.MenuRepository;
 import jp.co.lossvoid.repository.OrderRepository;
 import jp.co.lossvoid.repository.StaffRepository;
@@ -89,6 +90,23 @@ class MigrationRoutesTest {
         mvc.perform(patch("/api/orders/1/items/2/cancel-one").with(user("T001").roles("EMPLOYEE")))
             .andExpect(status().isOk());
         verify(orderService).cancelOneItem(1L, 2L);
+    }
+
+    @Test
+    void acceptsTheTwoStageKitchenWorkflow() throws Exception {
+        mvc.perform(patch("/api/kitchen/order-items/7")
+                .contentType("application/json")
+                .content("{\"status\":\"KITCHEN_READY\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.ok").value(true));
+        mvc.perform(patch("/api/kitchen/order-items/7")
+                .contentType("application/json")
+                .content("{\"status\":\"FLOOR_PICKED\",\"served\":true}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.ok").value(true));
+
+        verify(orderService).updateItemStatus(7L, new StatusUpdateRequest("KITCHEN_READY", null));
+        verify(orderService).updateItemStatus(7L, new StatusUpdateRequest("FLOOR_PICKED", true));
     }
 
     @Test
