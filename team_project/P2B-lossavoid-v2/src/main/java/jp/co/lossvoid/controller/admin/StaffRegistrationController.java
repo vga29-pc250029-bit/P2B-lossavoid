@@ -1,5 +1,30 @@
 package jp.co.lossvoid.controller.admin;
 
+<<<<<<< HEAD
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+@RequestMapping("/admin/staff")
+public class StaffRegistrationController {
+
+    // 担当者情報登録画面を表示
+    @GetMapping("/register")
+    public String showRegistrationForm() {
+        return "customer/staff-register";
+    }
+
+    // 担当者情報を登録
+    @PostMapping("/register")
+    public String registerStaff() {
+        return "customer/staff-confirm";
+    }
+=======
+=======
+>>>>>>> c629c30115ca3586bbd56df87536805fd66e6ab9
 import jp.co.lossvoid.bean.*;
 import jp.co.lossvoid.form.*;
 import jp.co.lossvoid.repository.*;
