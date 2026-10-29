@@ -1,6 +1,22 @@
 <!DOCTYPE html>
+<!-- 商品詳細・数量選択URLを直接開くための画面。商品コードとモードを受け取り、背景のメニュー一覧も描画する。 -->
 
-<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet" th:href="@{/guest-entry.css}"/><script src="https://cdn.tailwindcss.com"></script><title>商品詳細</title><link href="/css/customer.css" rel="stylesheet" th:href="@{/css/customer.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-menu" th:attr="data-menu-code=${menuCode},data-quantity-mode=${quantityMode ?: false}"><div class="page" id="view-menu"><div class="header-red"><button class="btn-red" onclick="showPage('view-menu')">メニューに戻る</button></div></div><nav aria-label="注文メニュー" class="grid grid-cols-5 border-t border-gray-300 bg-white footer-nav hidden" id="order-navigation">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><link href="/guest-entry.css" rel="stylesheet" th:href="@{/guest-entry.css}"/><script src="https://cdn.tailwindcss.com"></script><title>商品詳細</title><link href="/css/customer.css" rel="stylesheet" th:href="@{/css/customer.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-menu" th:attr="data-menu-code=${menuCode},data-quantity-mode=${quantityMode ?: false}"><div class="page" id="view-menu">
+<div class="header-green">
+<span class="title"><i class="fa-solid fa-utensils" style="margin-right:6px;"></i>メニュー注文</span>
+<button class="table-chip guest-edit" onclick="openGuestEntry()" title="人数を変更" type="button"><span id="table-chip">卓番 未設定</span><i aria-hidden="true" class="fa-solid fa-pen"></i></button>
+</div>
+<div id="search-wrap">
+<input id="search-input" oninput="onSearchInput()" placeholder="メニュー名で検索" type="text"/>
+</div>
+<div id="category-tabs"></div>
+<div id="menu-scroll">
+<div class="menu-grid" id="menu-grid"></div>
+</div>
+</div>
+<!-- お客様の画面移動。卓番と未送信のかごをcustomer.jsが引き継ぐ。 -->
+<nav aria-label="注文メニュー" class="grid grid-cols-5 border-t border-gray-300 bg-white footer-nav hidden" id="order-navigation">
 <button class="nav-btn" id="nav-add" onclick="showPage('view-menu')"><i class="fa-solid fa-utensils"></i><span>メニュー</span></button>
 <button class="nav-btn" id="nav-cart" onclick="showPage('view-cart')">
 <div class="cart-badge hidden" id="cart-badge">0</div>
@@ -9,7 +25,9 @@
 <button class="nav-btn" id="nav-history" onclick="showPage('view-history')"><i class="fa-solid fa-receipt"></i><span>注文履歴</span></button>
 <button class="nav-btn" onclick="callStaff()"><i class="fa-solid fa-bell-concierge"></i><span>店員呼出</span></button>
 <button class="nav-btn" onclick="showToast('レジにてお会計をお願いします')"><i class="fa-solid fa-cash-register"></i><span>会計する</span></button>
-</nav><div id="info-overlay" onclick="if(event.target===this) closeInfoModal()">
+</nav>
+<!-- 商品情報を重ねる領域。表示対象の商品と非同期取得結果の対応はcustomer.jsで管理する。 -->
+<div id="info-overlay" onclick="if(event.target===this) closeInfoModal()">
 <section aria-labelledby="info-item-name" aria-modal="true" id="info-modal" role="dialog">
 <div class="info-modal-header">
             商品情報
@@ -30,7 +48,9 @@
             </div>
 </div>
 <button class="btn-red" onclick="openQtyModal(document.body.dataset.menuCode)" type="button">数量を選ぶ</button></section>
-</div><div id="qty-overlay" onclick="if(event.target===this) closeQtyModal()">
+</div>
+<!-- 数量選択の共通ポップアップ。背景の一覧を残し、showクラスで開閉する。 -->
+<div id="qty-overlay" onclick="if(event.target===this) closeQtyModal()">
 <div id="qty-modal">
 <div class="item-title" id="modal-item-name"></div>
 <div class="item-price" id="modal-item-price"></div>
@@ -44,4 +64,6 @@
 <button class="btn-red" onclick="confirmAddToCart()">注文かごへ追加</button>
 </div>
 </div>
-</div><div id="toast"></div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/customer.js" th:src="@{/js/customer.js}"></script></body></html>
+</div><div id="toast"></div>
+<!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
+<script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/customer.js" th:src="@{/js/customer.js}"></script></body></html>

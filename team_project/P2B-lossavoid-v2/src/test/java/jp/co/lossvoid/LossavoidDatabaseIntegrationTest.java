@@ -20,6 +20,9 @@ import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.test.context.transaction.BeforeTransaction;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 明示的に有効化した場合だけ実Oracleで連携を検証する。行更新は戻すが採番や起動時DDLは戻らないため、専用検証DBで実行する。
+ */
 @SpringBootTest
 @Transactional
 @EnabledIfEnvironmentVariable(named = "LOSSAVOID_DB_TEST", matches = "true")
@@ -101,12 +104,37 @@ class LossavoidDatabaseIntegrationTest {
         Long detail = first.items().get(0).id();
         orders.updateItemStatus(detail, new StatusUpdateRequest("COOKING", false));
         assertNotNull(jdbc.queryForObject("SELECT START_TIME FROM COOKING_TASKS WHERE ORDER_DETAIL_ID = ?", java.sql.Timestamp.class, detail));
-        orders.updateItemStatus(detail, new StatusUpdateRequest("COMPLETED", true));
+        orders.updateItemStatus(detail, new StatusUpdateRequest("KITCHEN_READY", null));
+        var ready = orders.findById(first.id()).items().get(0);
+        assertFalse(ready.served());
+        assertNull(ready.servedAt());
+        assertNotNull(ready.kitchenReadyAt());
+        assertEquals("KITCHEN_READY", ready.cookStatus());
+
+        orders.updateItemStatus(detail, new StatusUpdateRequest("FLOOR_PICKED", true));
         var served = orders.findById(first.id()).items().get(0);
         assertTrue(served.served());
         assertNotNull(served.servedAt());
-        assertEquals("COMPLETED", served.cookStatus());
+        assertNotNull(served.kitchenReadyAt());
+        assertEquals(ready.kitchenReadyAt(), served.kitchenReadyAt());
+        assertEquals("FLOOR_PICKED", served.cookStatus());
         assertNotNull(jdbc.queryForObject("SELECT END_TIME FROM COOKING_TASKS WHERE ORDER_DETAIL_ID = ?", java.sql.Timestamp.class, detail));
+
+        // Repeated current-state events are harmless, but terminal items never move backward.
+        orders.updateItemStatus(detail, new StatusUpdateRequest("FLOOR_PICKED", true));
+        assertThrows(IllegalStateException.class,
+            () -> orders.updateItemStatus(detail, new StatusUpdateRequest("COOKING", false)));
+        assertThrows(IllegalStateException.class,
+            () -> orders.updateItemStatus(detail, new StatusUpdateRequest("WAITING", false)));
+        var stillServed = orders.findById(first.id()).items().get(0);
+        assertEquals("FLOOR_PICKED", stillServed.cookStatus());
+        assertEquals(served.kitchenReadyAt(), stillServed.kitchenReadyAt());
+        assertEquals(served.servedAt(), stillServed.servedAt());
+
+        Long legacyDetail = first.items().get(1).id();
+        orders.updateItemStatus(legacyDetail, new StatusUpdateRequest("COMPLETED", true));
+        orders.updateItemStatus(legacyDetail, new StatusUpdateRequest("DONE", true));
+        assertEquals("FLOOR_PICKED", orders.findById(first.id()).items().get(1).cookStatus());
 
         orders.cancelOneItem(first.id(), detail);
         assertEquals(1, orders.findById(first.id()).items().size());

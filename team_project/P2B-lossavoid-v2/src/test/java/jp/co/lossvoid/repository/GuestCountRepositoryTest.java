@@ -12,6 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+/**
+ * DBをモック化し、来店人数の保存と、追加注文で既存の来店情報を再利用することを確認する。
+ */
 class GuestCountRepositoryTest {
     @Test
     void storesPeopleInCustomersAndLinksTheNativeOrderId() {

@@ -10,6 +10,9 @@ import java.util.Arrays;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * HTTP Basicの認証情報がブラウザーで再利用される場合に備え、ログアウト後の管理画面アクセスを一度401にする。
+ */
 public class BasicLogoutBarrierFilter extends OncePerRequestFilter {
     public static final String COOKIE_NAME = "ORDER_BASIC_LOGOUT";
 
@@ -22,6 +25,7 @@ public class BasicLogoutBarrierFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         boolean loginPage = "/admin.html".equals(path) || "/admin".equals(path)
             || path.startsWith("/admin/") || "/staff/login".equals(path);
+        // ログアウトCookieを見た最初の管理アクセスを401にし、Cookieを消して次の通常認証へ戻す。
         if (loginPage && hasLogoutCookie(request)) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Basic realm=\"Order Admin Login\"");

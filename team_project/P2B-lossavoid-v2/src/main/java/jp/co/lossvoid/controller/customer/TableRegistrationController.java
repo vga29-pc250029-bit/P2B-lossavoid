@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * ルートURLを卓番・人数入力へ案内する。来店入力の画面操作はcustomer.jsが担当する。
+ */
 @Controller
 public class TableRegistrationController {
 

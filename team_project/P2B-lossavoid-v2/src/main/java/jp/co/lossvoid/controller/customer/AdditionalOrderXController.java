@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 追加注文用URLをメニュー一覧へ転送する。転送だけでは注文を登録しない。
+ */
 @Controller
 public class AdditionalOrderXController {
 

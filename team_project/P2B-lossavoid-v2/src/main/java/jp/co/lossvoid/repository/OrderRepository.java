@@ -9,11 +9,15 @@ import jp.co.lossvoid.form.StatusUpdateRequest;
 import jp.co.lossvoid.form.TableChangeRequest;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 来店・注文・商品1個ごとの明細・調理タスクをOracleへ保存する。関連する更新はトランザクション内で揃える。
+ */
 @Repository
 public class OrderRepository {
     private static final String ORDER_SELECT = """
@@ -27,6 +31,7 @@ public class OrderRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    // 数量3の商品でも明細と調理タスクは3組作り、個別の完成・提供・取消を可能にする。
     @Transactional
     public OrderDto create(OrderRequest request) {
         Long customerId = resolveCustomer(request.table(), request.guestCount());
@@ -79,27 +84,89 @@ public class OrderRepository {
             """, customerId, orderId);
     }
 
+    // キッチン完成と持出しを別段階で保存する。状態の条件付き更新により、完成済みの巻き戻しを拒否する。
     @Transactional
     public void updateItemStatus(Long orderItemId, StatusUpdateRequest request) {
+        String requestedStatus = request.status().trim().toUpperCase(Locale.ROOT);
+
+        // 完成の再送でも最初の完成時刻を残す。この段階ではまだ提供済みにはしない。
+        if ("KITCHEN_READY".equals(requestedStatus)) {
+            int updated = jdbcTemplate.update("""
+                UPDATE COOKING_TASKS
+                SET STATUS = 'KITCHEN_READY',
+                    END_TIME = COALESCE(END_TIME, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ?
+                  AND STATUS IN ('WAITING', 'COOKING', 'KITCHEN_READY')
+                """, orderItemId);
+            if (updated == 0) {
+                throw new IllegalStateException("The order item cannot be marked kitchen-ready from its current state");
+            }
+            return;
+        }
+
+        // キッチン完成後だけ持出しを許可し、提供フラグと最初の持出し時刻を同じトランザクションで記録する。
+        if ("FLOOR_PICKED".equals(requestedStatus)) {
+            int updated = jdbcTemplate.update("""
+                UPDATE COOKING_TASKS
+                SET STATUS = 'FLOOR_PICKED'
+                WHERE ORDER_DETAIL_ID = ?
+                  AND STATUS IN ('KITCHEN_READY', 'FLOOR_PICKED')
+                """, orderItemId);
+            if (updated == 0) {
+                throw new IllegalStateException("The order item must be kitchen-ready before floor pickup");
+            }
+            jdbcTemplate.update("""
+                UPDATE ORDER_DETAILS
+                SET SERVED = 1,
+                    SERVED_AT = COALESCE(SERVED_AT, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ?
+                """, orderItemId);
+            return;
+        }
+
+        // Backward compatibility for the former one-click KDS client.
+        if (("COMPLETED".equals(requestedStatus) || "DONE".equals(requestedStatus))
+                && Boolean.TRUE.equals(request.served())) {
+            jdbcTemplate.update("""
+                UPDATE COOKING_TASKS
+                SET STATUS = 'FLOOR_PICKED',
+                    END_TIME = COALESCE(END_TIME, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ? AND STATUS <> 'CANCELED'
+                """, orderItemId);
+            jdbcTemplate.update("""
+                UPDATE ORDER_DETAILS
+                SET SERVED = 1,
+                    SERVED_AT = COALESCE(SERVED_AT, CURRENT_TIMESTAMP)
+                WHERE ORDER_DETAIL_ID = ?
+                """, orderItemId);
+            return;
+        }
+
+        if (!List.of("WAITING", "COOKING").contains(requestedStatus)) {
+            throw new IllegalArgumentException("Unsupported cooking status: " + requestedStatus);
+        }
+
+        int updated = jdbcTemplate.update("""
+            UPDATE COOKING_TASKS
+            SET STATUS = ?,
+                START_TIME = CASE WHEN ? = 'COOKING' THEN COALESCE(START_TIME, CURRENT_TIMESTAMP)
+                                  WHEN ? = 'WAITING' THEN NULL ELSE START_TIME END,
+                END_TIME = CASE WHEN ? = 'WAITING' THEN NULL ELSE END_TIME END
+            WHERE ORDER_DETAIL_ID = ?
+              AND STATUS IN ('WAITING', 'COOKING')
+            """, requestedStatus, requestedStatus, requestedStatus, requestedStatus, orderItemId);
+        if (updated == 0) {
+            throw new IllegalStateException(
+                "The order item cannot transition to " + requestedStatus + " from its current state");
+        }
+
         Integer served = request.served() == null ? null : request.served() ? 1 : 0;
         jdbcTemplate.update("""
             UPDATE ORDER_DETAILS
             SET SERVED = COALESCE(?, SERVED),
-                SERVED_AT = CASE
-                    WHEN ? = 1 THEN CURRENT_TIMESTAMP
-                    WHEN ? = 0 THEN NULL
-                    ELSE SERVED_AT
-                END
+                SERVED_AT = CASE WHEN ? = 0 AND ? = 'WAITING' THEN NULL ELSE SERVED_AT END
             WHERE ORDER_DETAIL_ID = ?
-            """, served, served, served, orderItemId);
-        jdbcTemplate.update("""
-            UPDATE COOKING_TASKS
-            SET STATUS = ?,
-                START_TIME = CASE WHEN ? = 'COOKING' THEN COALESCE(START_TIME, CURRENT_TIMESTAMP) ELSE START_TIME END,
-                END_TIME = CASE WHEN ? IN ('COMPLETED', 'DONE') THEN COALESCE(END_TIME, CURRENT_TIMESTAMP)
-                                WHEN ? = 'WAITING' THEN NULL ELSE END_TIME END
-            WHERE ORDER_DETAIL_ID = ?
-            """, request.status(), request.status(), request.status(), request.status(), orderItemId);
+            """, served, served, requestedStatus, orderItemId);
     }
 
     public void cancelOrder(Long orderId) {
@@ -108,6 +175,7 @@ public class OrderRepository {
             """, orderId);
     }
 
+    // 対象を行ロックして1個だけ取り消す。最後の1個なら調理タスクも取消し、明細が空の注文を取消状態へ揃える。
     @Transactional
     public void cancelOneItem(Long orderId, Long orderItemId) {
         Integer quantity = jdbcTemplate.queryForObject("""
@@ -142,6 +210,7 @@ public class OrderRepository {
             """, orderId, orderId);
     }
 
+    // 合算先に新しい注文を作ってから元注文を取消す。既存明細のIDや調理状態を直接移す方式ではない。
     @Transactional
     public OrderDto merge(MergeRequest request) {
         List<OrderDto> orders = request.orderIds().stream().map(this::findById).toList();
@@ -155,6 +224,7 @@ public class OrderRepository {
         return merged;
     }
 
+    // 同卓の最新のOPEN来店を再利用する。見つからない場合だけ来店レコードを新規採番する。
     private Long resolveCustomer(String tableNo, Integer guestCount) {
         List<Long> customers = jdbcTemplate.query("""
             SELECT CUSTOMER_ID FROM CUSTOMERS
@@ -183,17 +253,19 @@ public class OrderRepository {
             findItems(rs.getLong("ORDER_ID")));
     }
 
+    // 取消済みや数量0の明細を除き、調理タスクがない旧明細はWAITINGとして読み出す。
     private List<OrderItemDto> findItems(Long orderId) {
         return jdbcTemplate.query("""
             SELECT d.ORDER_DETAIL_ID AS ORDER_ITEM_ID, TO_CHAR(d.MENU_ID) AS MENU_CODE,
                    d.MENU_NAME, d.PRICE, d.QUANTITY AS QTY, COALESCE(t.STATUS, 'WAITING') AS COOK_STATUS,
-                   d.SERVED, d.SERVED_AT, d.NOTE
+                   t.END_TIME AS KITCHEN_READY_AT, d.SERVED, d.SERVED_AT, d.NOTE
             FROM ORDER_DETAILS d LEFT JOIN COOKING_TASKS t ON t.ORDER_DETAIL_ID = d.ORDER_DETAIL_ID
             WHERE d.ORDER_ID = ? AND d.QUANTITY > 0 AND COALESCE(t.STATUS, 'WAITING') <> 'CANCELED'
             ORDER BY d.ORDER_DETAIL_ID
             """, (rs, rowNum) -> new OrderItemDto(
                 rs.getLong("ORDER_ITEM_ID"), rs.getString("MENU_CODE"), rs.getString("MENU_NAME"),
-                rs.getInt("PRICE"), rs.getInt("QTY"), rs.getString("COOK_STATUS"), rs.getInt("SERVED") == 1,
+                rs.getInt("PRICE"), rs.getInt("QTY"), rs.getString("COOK_STATUS"),
+                rs.getObject("KITCHEN_READY_AT", LocalDateTime.class), rs.getInt("SERVED") == 1,
                 rs.getObject("SERVED_AT", LocalDateTime.class), rs.getString("NOTE")
             ), orderId);
     }

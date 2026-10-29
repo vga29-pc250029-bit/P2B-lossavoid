@@ -7,6 +7,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.stereotype.Component;
 
+/**
+ * 起動時に基本6表の存在を確認し、既存DB向けの追加SQLを実行する。新規DB全体や業務データを作る処理ではない。
+ */
 @Component
 public class LossavoidSchemaInitializer implements ApplicationRunner {
     private final JdbcTemplate jdbcTemplate;
@@ -28,6 +31,7 @@ public class LossavoidSchemaInitializer implements ApplicationRunner {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
             new ClassPathResource("db/lossavoid-upgrade.sql"));
         populator.setSqlScriptEncoding("UTF-8");
+        // 追加SQLはPL/SQLブロックを含むため、文末のセミコロンではなくブロック末尾を実行単位にする。
         populator.setSeparator("/");
         populator.execute(java.util.Objects.requireNonNull(jdbcTemplate.getDataSource()));
     }

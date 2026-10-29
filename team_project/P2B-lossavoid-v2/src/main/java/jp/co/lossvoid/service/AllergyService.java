@@ -6,6 +6,9 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+/**
+ * 公式アレルゲン一覧を取得し、正常な応答を6時間キャッシュする。同時取得の重複は同期メソッドで抑える。
+ */
 @Service
 public class AllergyService {
     private static final String OFFICIAL_ALLERGY_URL = "https://allergy.saizeriya.co.jp/view?lg=ja";
@@ -15,6 +18,7 @@ public class AllergyService {
     private JsonNode cachedItems;
     private Instant cacheExpiresAt = Instant.EPOCH;
 
+    // 外部応答の形が正しい場合だけキャッシュを更新する。取得に失敗したデータを正常な一覧として返さない。
     public synchronized JsonNode getOfficialItems() {
         if (cachedItems != null && Instant.now().isBefore(cacheExpiresAt)) {
             return cachedItems;

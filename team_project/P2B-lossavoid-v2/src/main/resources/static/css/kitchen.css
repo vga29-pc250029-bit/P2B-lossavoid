@@ -1,74 +1,358 @@
+/* KDSの注文一覧・整理結果・完成待ち・提供履歴の表示を定義する。時刻に応じたクラスの切替はkitchen.jsが担当する。 */
+:root {
+    --ink: #18202b;
+    --line: #aeb8c5;
+    --paper: #f3f5f7;
+    --ticket: #dceeff;
+    --warm: #fff6d8;
+    --yellow: #ffd43b;
+    --red: #d92323;
+    --green: #087f5b;
+    --urgent: #c92a2a;
+}
 
-        body {
-            font-family: 'MS Gothic', 'Yu Gothic', sans-serif;
-            background-color: #f0f0f0;
-        }
+* { box-sizing: border-box; }
 
-        .header-bg {
-            background-color: #ffedcc;
-        }
+body {
+    margin: 0;
+    color: var(--ink);
+    font-family: "Yu Gothic", "Meiryo", sans-serif;
+    background: var(--paper);
+}
 
-        .btn-yellow {
-            background-color: #ffcc00;
-            border: 1px solid #333;
-        }
+.hidden { display: none !important; }
 
-        .order-card {
-            border: 1px solid #333;
-            margin-bottom: 4px;
-        }
+.header-bg { background: #ffedcc; }
 
-        .bg-blue-light {
-            background-color: #d1e9ff;
-        }
+.kds-header {
+    min-height: 58px;
+    padding: 7px 10px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+}
 
-        .badge-red {
-            background-color: #ff0000;
-            color: white;
-            border-radius: 50%;
-            width: 22px;
-            height: 22px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            font-weight: bold;
-        }
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 
-        .badge-red.clickable {
-            cursor: pointer;
-            transition: transform 0.1s, background-color 0.1s;
-        }
+.header-actions.right { justify-content: flex-end; }
+.header-status { min-width: 0; text-align: center; }
 
-        .badge-red.clickable:hover {
-            background-color: #cc0000;
-            transform: scale(1.1);
-        }
+.btn-yellow {
+    min-height: 42px;
+    padding: 7px 14px;
+    border: 2px solid #333;
+    border-radius: 6px;
+    background: var(--yellow);
+    color: #111;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+}
 
-        .badge-red.clickable:active {
-            transform: scale(0.9);
-        }
+.btn-yellow.primary {
+    min-width: 104px;
+    background: #ffb703;
+    font-size: 21px;
+}
 
-        .right-panel {
-            background-color: #fff9e6;
-            border-left: 2px dashed #333;
-        }
+.btn-yellow:hover { filter: brightness(.96); }
+.current-time { min-width: 94px; font: 700 22px/1 monospace; }
 
-        #news-btn,
-        #completed-btn,
-        #shift-btn,
-        #delete-btn,
-        #organize-btn {
-            font-size: 20px;
-        }
-        
-        #news-btn,
-        #shift-btn {
-			display:none;
-		}
+.pickup-alert {
+    display: inline-block;
+    padding: 7px 14px;
+    border: 2px solid #7f1d1d;
+    border-radius: 999px;
+    color: white;
+    background: var(--urgent);
+    font-weight: 900;
+    animation: urgent-pulse .8s ease-in-out infinite alternate;
+}
 
-        #table-number {
-            color: #767676;
-            font-size: 23px;
-        }
-    
+.kds-message {
+    display: inline-block;
+    max-width: 100%;
+    padding: 7px 12px;
+    border: 1px solid #1c7ed6;
+    border-radius: 5px;
+    color: #0b3d68;
+    background: #d0ebff;
+    font-weight: 800;
+}
+
+.kds-message[data-tone="error"] {
+    border-color: #c92a2a;
+    color: #7f1d1d;
+    background: #ffe3e3;
+}
+
+.kds-message[data-tone="warning"] {
+    border-color: #d97706;
+    color: #78350f;
+    background: #fef3c7;
+}
+
+.kds-workspace {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(330px, 42%) minmax(480px, 58%);
+}
+
+.raw-panel,
+.right-panel {
+    min-height: 0;
+    padding: 8px;
+    overflow-y: auto;
+}
+
+.raw-panel { border-right: 2px solid #333; }
+.right-panel { background: var(--warm); }
+
+.panel-title {
+    position: sticky;
+    top: -8px;
+    z-index: 2;
+    margin: -8px -8px 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #7b8794;
+    background: #fff;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.panel-title small {
+    margin-left: 6px;
+    color: #53606d;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.order-card {
+    margin-bottom: 7px;
+    border: 2px solid #4c5b6a;
+    border-radius: 6px;
+    background: var(--ticket);
+}
+
+.ticket-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #7ba4c7;
+}
+
+.table-number { color: #384655; font-size: 23px; font-weight: 900; }
+
+.raw-item-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) auto auto;
+    align-items: center;
+    gap: 6px;
+    min-height: 38px;
+    padding: 5px 2px;
+    border-bottom: 1px dotted #7591aa;
+}
+
+.raw-item-row:last-child { border-bottom: 0; }
+.raw-item-name { font-size: 17px; font-weight: 800; }
+
+.recipe-chip,
+.raw-state {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.raw-state.ready { color: white; background: var(--green); }
+
+.workflow-section { margin-bottom: 14px; }
+.workflow-section h2 {
+    margin: 0 0 6px;
+    padding: 7px 9px;
+    border-left: 6px solid #e67700;
+    background: white;
+    font-size: 19px;
+    font-weight: 900;
+}
+
+.workflow-section h2 span { color: #5f6b76; font-size: 13px; }
+
+.workflow-row {
+    display: grid;
+    grid-template-columns: 118px minmax(210px, 1fr) 112px;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 7px;
+    padding: 8px;
+    border: 2px solid #697480;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 2px 0 rgb(0 0 0 / 12%);
+}
+
+.ticket-enter { animation: ticket-in .24s ease-out both; }
+.workflow-enter { animation: workflow-in .22s ease-out both; }
+
+.workflow-main { min-width: 0; }
+.workflow-title { font-size: 18px; font-weight: 900; }
+.workflow-meta { margin-top: 3px; color: #354351; font-size: 13px; }
+.workflow-instruction { margin-top: 3px; color: #7c2d12; font-size: 12px; font-weight: 800; }
+
+.workflow-feeds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+
+.workflow-feeds > span {
+    padding: 3px 6px;
+    border: 1px solid #f59f00;
+    border-radius: 4px;
+    background: #fff3bf;
+    color: #5f3b00;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.sequence-number {
+    display: inline-grid;
+    place-items: center;
+    width: 25px;
+    height: 25px;
+    margin-right: 7px;
+    border-radius: 50%;
+    color: #fff;
+    background: #343a40;
+    font-size: 14px;
+}
+
+.floor-pickup-button,
+.kitchen-ready-button {
+    min-height: 56px;
+    padding: 8px;
+    border: 2px solid #26313c;
+    border-radius: 7px;
+    color: white;
+    font-size: 15px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.floor-pickup-button { background: var(--green); }
+.kitchen-ready-button { background: var(--red); }
+.floor-pickup-button:disabled { color: #6c757d; background: #e9ecef; cursor: not-allowed; }
+.kitchen-ready-button:disabled { color: #495057; background: #dee2e6; cursor: not-allowed; }
+.floor-pickup-button:not(:disabled):hover,
+.kitchen-ready-button:not(:disabled):hover { filter: brightness(.9); }
+
+.counter-action-row { border-color: var(--green); background: #e6fcf5; }
+.plan-start-due { border-color: #d97706; background: #fffbeb; }
+.plan-start-due .plan-start-label { color: #9a3412; }
+.pickup-overdue { border-color: var(--urgent) !important; background: #fff0f0 !important; }
+.pickup-overdue .floor-pickup-button { background: var(--urgent); animation: urgent-pulse .65s ease-in-out infinite alternate; }
+
+.organize-notice,
+.empty-panel,
+.error-panel {
+    padding: 18px;
+    border: 2px dashed #9a6b00;
+    border-radius: 8px;
+    text-align: center;
+    background: #fff;
+    font-weight: 800;
+}
+
+.empty-panel.strong { font-size: 17px; line-height: 1.7; }
+.error-panel { border-color: #c92a2a; color: #7f1d1d; background: #ffe3e3; }
+
+.served-dialog {
+    width: min(98vw, 1500px);
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid #111;
+    background: white;
+}
+
+.served-dialog-header {
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.served-dialog-header h2 { margin: 0; font-size: 22px; font-weight: 900; }
+
+.served-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #ced4da;
+    background: #f8f9fa;
+}
+
+.served-filters label { font-size: 15px; font-weight: 800; }
+.served-filters select { margin-left: 5px; padding: 5px 7px; border: 1px solid #868e96; background: white; }
+.served-filters #served-count { margin-left: auto; color: #495057; font-weight: 800; }
+.served-table-wrap { flex: 1; overflow: auto; }
+
+.served-table { width: 100%; min-width: 1280px; border-collapse: collapse; font-size: 13px; }
+.served-table th { position: sticky; top: 0; z-index: 1; background: #fff3bf; }
+.served-table th,
+.served-table td { padding: 7px 6px; border: 1px solid #ced4da; text-align: center; white-space: nowrap; }
+.served-table .served-name { min-width: 190px; text-align: left; white-space: normal; }
+.served-table .money { text-align: right; }
+.metric-late { color: #c92a2a; font-weight: 900; }
+.metric-early { color: #1864ab; font-weight: 900; }
+.metric-on-time { color: #087f5b; font-weight: 900; }
+.metric-missing,
+.history-note { color: #6c757d; }
+.history-note { max-width: 210px; white-space: normal !important; }
+
+@keyframes urgent-pulse {
+    from { transform: scale(1); filter: brightness(1); }
+    to { transform: scale(1.035); filter: brightness(1.12); }
+}
+
+@keyframes ticket-in {
+    from { opacity: 0; transform: translateY(-8px) scale(.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes workflow-in {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pickup-alert,
+    .pickup-overdue .floor-pickup-button,
+    .ticket-enter,
+    .workflow-enter { animation: none; }
+}
+
+@media (max-width: 900px) {
+    body { overflow: auto !important; }
+    .kds-header { grid-template-columns: 1fr; }
+    .header-actions,
+    .header-actions.right { justify-content: center; flex-wrap: wrap; }
+    .kds-workspace { display: block; overflow: visible; }
+    .raw-panel,
+    .right-panel { overflow: visible; border: 0; }
+    .workflow-row { grid-template-columns: 92px minmax(160px, 1fr) 92px; }
+    .current-time { text-align: center; }
+}

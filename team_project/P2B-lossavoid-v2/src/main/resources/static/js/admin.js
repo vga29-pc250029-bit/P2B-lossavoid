@@ -1,6 +1,8 @@
+// 従業員注文、注文済み商品の取消、卓番変更・合算、在庫・担当者管理を操作する。画面の表示制御とは別にサーバー側でも認可する。
 const v2StaffKey = 'p2b-v2:staff-cart';
 let v2StaffState;
 try { v2StaffState = JSON.parse(sessionStorage.getItem(v2StaffKey) || '{}'); } catch { v2StaffState = {}; }
+// 未送信のかごをタブ単位で保持する。卓番・人数など端末で共有する設定とは保存先を分ける。
 function saveStaffState() {
     try { sessionStorage.setItem(v2StaffKey, JSON.stringify({cart})); } catch {}
 }
@@ -469,6 +471,7 @@ window.addEventListener('pagehide', saveStaffState);
 
     // ---- 注文送信 ----
     // orderMethod は従業員端末からの注文を示す区分として保存する。
+    // 送信前に卓番と人数を正規化する。注文登録に成功した場合だけかごを空にし、失敗時は内容を維持する。
     async function submitOrder() {
         if (cart.length === 0) {
             showToast('注文かごが空です');
@@ -916,6 +919,7 @@ window.addEventListener('pagehide', saveStaffState);
         }).join('');
     }
 
+    // 新規登録と既存編集を同じフォームで扱い、パスワードの空欄の意味をモードごとに分ける。
     async function saveStaff(event) {
         event.preventDefault();
         const codeInput = document.getElementById('staff-reg-code');
@@ -1071,6 +1075,7 @@ window.addEventListener('pagehide', saveStaffState);
     }
 
     // ---- 初期化 ----
+    // 認証APIが返したユーザー名を担当者として使う。非表示のタイルだけを権限制御の根拠にはしない。
     async function initializeAuthenticatedUser() {
         try {
             authenticatedUser = await window.oracleApi.getCurrentUser();
@@ -1085,6 +1090,7 @@ window.addEventListener('pagehide', saveStaffState);
         }
     }
 
+    // HTTP Basicの再認証を促すサーバー処理を呼んでから端末内の担当者情報を消し、ログアウト画面へ移動する。
     async function logoutAdmin() {
         const button = document.querySelector('.logout-btn');
         if (button) button.disabled = true;

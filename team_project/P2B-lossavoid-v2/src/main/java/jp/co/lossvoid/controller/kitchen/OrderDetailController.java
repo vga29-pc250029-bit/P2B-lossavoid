@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 注文IDに対応する情報をDBから取得し、キッチンの注文詳細テンプレートへ渡す。
+ */
 @Controller
 public class OrderDetailController {
     private final OrderRepository orderRepository;

@@ -1,6 +1,8 @@
+-- 基本6表がある既存環境へ必要な列・注文詳細表・外部キー・採番を追加する。すべての旧定義や参照切れデータを修復する処理ではない。
 -- Add only the fields required by the existing web screens. No business data is imported.
 DECLARE
     object_count NUMBER;
+    -- 追加は列がない場合だけ行う。既存列の型変更や、すべての列の不足を網羅した修復ではない。
     PROCEDURE add_column_if_missing(table_name_in VARCHAR2, column_name_in VARCHAR2, definition_in VARCHAR2) IS
         column_count NUMBER;
     BEGIN
@@ -50,6 +52,7 @@ BEGIN
             CONSTRAINT FK_DETAILS_MENU FOREIGN KEY (MENU_ID) REFERENCES MENUS (MENU_ID))';
     END IF;
 
+    -- 外部キー追加は既存データも検証する。参照先の注文詳細がない調理タスクが残ると起動時に失敗する。
     SELECT COUNT(*) INTO object_count FROM USER_CONSTRAINTS WHERE CONSTRAINT_NAME = 'FK_TASK_ORDER_DETAIL';
     IF object_count = 0 THEN
         EXECUTE IMMEDIATE 'ALTER TABLE COOKING_TASKS ADD CONSTRAINT FK_TASK_ORDER_DETAIL

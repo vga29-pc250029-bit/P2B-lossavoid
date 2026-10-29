@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 注文全体の取消と、提供済みも含む商品1個の取消を別APIとして扱う。保存後のKDS通知はサービス層で行う。
+ */
 @Controller
 public class OrderCancelController {
     private final OrderService orderService;

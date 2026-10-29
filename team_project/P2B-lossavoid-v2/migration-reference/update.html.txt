@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- 旧Firestore向けCSV一括更新ツールの参照資料。データ削除を伴う旧処理なので、Oracle版の画面としては使用しない。 -->
+
 <html lang="ja">
 
 <head>

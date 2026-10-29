@@ -1,9 +1,11 @@
+// 各画面で使うSpring APIの共通窓口。JSONの送受信、HTTPエラー、タイムアウトを一か所で扱い、ブラウザーからOracleへ直接接続しない。
 const SPRING_API_BASE_URL = window.ORDER_API_BASE_URL || (() => {
     const url = new URL(location.protocol === "file:" ? "http://localhost:1122/lossavoid" : location.origin);
     url.pathname = window.orderAppPath ? window.orderAppPath('/api') : '/api';
     return url.href.replace(/\/$/, "");
 })();
 
+// 12秒で要求を中断する。HTTPエラーと、本文がない204応答を通常のJSON応答から分ける。
 async function springApi(path, options = {}) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
@@ -27,6 +29,7 @@ async function springApi(path, options = {}) {
     }
 }
 
+// 画面側には業務ごとの操作だけを公開し、HTTPメソッド・URLの組立て・JSON化をここへ集約する。
 window.oracleApi = {
     kitchenStreamUrl: `${SPRING_API_BASE_URL}/kitchen/stream`,
     getCurrentUser() {
@@ -96,6 +99,18 @@ window.oracleApi = {
         return springApi(`/kitchen/order-items/${orderItemId}`, {
             method: "PATCH",
             body: JSON.stringify({ status, served })
+        });
+    },
+    markKitchenReady(orderItemId) {
+        return springApi(`/kitchen/order-items/${orderItemId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "KITCHEN_READY" })
+        });
+    },
+    markFloorPicked(orderItemId) {
+        return springApi(`/kitchen/order-items/${orderItemId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "FLOOR_PICKED", served: true })
         });
     },
     updateStock(menuCode, stockQty, soldOut) {

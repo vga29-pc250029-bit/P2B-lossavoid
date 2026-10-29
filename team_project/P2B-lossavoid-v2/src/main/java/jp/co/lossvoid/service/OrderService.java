@@ -9,6 +9,9 @@ import jp.co.lossvoid.repository.OrderRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
+/**
+ * 注文の保存処理とKDSへの更新通知をつなぐ。DBの更新処理が戻ってから再取得の合図を送る。
+ */
 @Service
 public class OrderService {
     private final OrderRepository orderRepository;

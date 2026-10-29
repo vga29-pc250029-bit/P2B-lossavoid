@@ -1,3 +1,4 @@
+-- 旧ORDER_APPの表定義を残した移行用の参照資料。現行LOSSAVOIDのスキーマ初期化には使用しない。
 -- Legacy ORDER_APP schema. Not used by the lossavoid version.
 CREATE TABLE MENU_MASTER (
     MENU_CODE VARCHAR2(20) PRIMARY KEY,
