@@ -1,3 +1,4 @@
+// 調理順計算の回帰テスト。投入間隔、左右の投入枠、複数周回、同卓の完成差と、大量注文時の計算時間を検証する。
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { performance } = require('node:perf_hooks');

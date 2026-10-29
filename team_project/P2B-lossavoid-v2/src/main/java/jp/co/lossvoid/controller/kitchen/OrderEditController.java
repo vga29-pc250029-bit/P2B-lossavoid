@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 卓番変更・注文合算の画面とAPIを提供する。複数レコードの整合性は保存処理側で維持する。
+ */
 @Controller
 public class OrderEditController {
     private final OrderService orderService;

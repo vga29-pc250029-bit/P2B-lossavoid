@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 注文登録APIの入口。受信した注文を検証してOrderServiceへ渡し、既存の確認画面URLも維持する。
+ */
 @Controller
 public class OrderRegistrationController {
     private final OrderService orderService;

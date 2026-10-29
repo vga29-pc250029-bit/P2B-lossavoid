@@ -1,7 +1,10 @@
+// お客様の卓番・人数・商品選択・注文かごを管理する。注文前の状態はタブ内に保存し、注文確定時だけ共通APIからサーバーへ送信する。
 const v2CustomerKey = 'p2b-v2:customer';
 let v2CustomerState;
 try { v2CustomerState = JSON.parse(sessionStorage.getItem(v2CustomerKey) || '{}'); } catch { v2CustomerState = {}; }
+// 卓番が変わったら別卓のかごや来店確認状態を流用しない。
 if (tableFromHash() && tableFromHash() !== v2CustomerState.tableNumber) v2CustomerState = {};
+// サーバー送信前の内容をタブ単位で保持し、分割された画面を移動してもかごを復元できるようにする。
 function saveCustomerState() {
     try { sessionStorage.setItem(v2CustomerKey, JSON.stringify({tableNumber, guestCount, visitConfirmed, cart, guestReturnPage})); } catch {}
 }
@@ -313,6 +316,7 @@ window.addEventListener('pagehide', saveCustomerState);
     }
 
     // ---- 商品・アレルギー情報 ----
+    // 表示対象のコードを保持し、前の商品への非同期応答が後から届いても現在の表示を上書きしない。
     async function openInfoModal(code) {
         const item = menuData[code];
         if (!item) return;
@@ -363,8 +367,8 @@ window.addEventListener('pagehide', saveCustomerState);
     }
 
     // ---- 数量選択モーダル ----
+    // 別ページへ移動せず、その場で重ねる。一覧の検索条件・スクロール位置を保つため背景DOMを作り直さない。
     function openQtyModal(code) {
-        if (!document.body.dataset.menuCode) { saveCustomerState(); location.assign(window.orderAppPath('/customer/menu/' + encodeURIComponent(code) + '/quantity') + (tableNumber ? '#' + tableNumber : '')); return; }
         if (!visitConfirmed || isSubmittingOrder) return;
         const item = menuData[code];
         if (!item || isOutOfStock(item)) {
@@ -406,7 +410,6 @@ window.addEventListener('pagehide', saveCustomerState);
         renderMenuGrid();
         showToast(`${item.icon} ${item.name} を${currentQty}点 追加しました`);
         closeQtyModal();
-        if (document.body.dataset.menuCode) showPage('view-menu');
     }
 
     // ---- カートバッジ ----
@@ -535,6 +538,7 @@ window.addEventListener('pagehide', saveCustomerState);
     }
 
     // ---- 注文送信 ----
+    // 送信中は再入と画面変更を抑え、成功した場合だけかごを空にする。失敗時は入力を残して再試行できるようにする。
     async function submitOrder() {
         if (isSubmittingOrder) return;
         if (!visitConfirmed || !normalizeTableNo(tableNumber) || parseGuestCount(guestCount) === null) {
@@ -587,6 +591,7 @@ window.addEventListener('pagehide', saveCustomerState);
         toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
     }
 
+    // 取得中のPromiseを共有し、連続操作で同じメニューAPIを重複呼出ししない。失敗時は空一覧と区別して再試行を表示する。
     function refreshMenu() {
         if (menuLoadPromise) return menuLoadPromise;
         menuLoadState = 'loading';

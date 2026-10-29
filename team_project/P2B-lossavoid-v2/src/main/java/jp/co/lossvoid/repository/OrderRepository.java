@@ -15,6 +15,9 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 来店・注文・商品1個ごとの明細・調理タスクをOracleへ保存する。関連する更新はトランザクション内で揃える。
+ */
 @Repository
 public class OrderRepository {
     private static final String ORDER_SELECT = """
@@ -28,6 +31,7 @@ public class OrderRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    // 数量3の商品でも明細と調理タスクは3組作り、個別の完成・提供・取消を可能にする。
     @Transactional
     public OrderDto create(OrderRequest request) {
         Long customerId = resolveCustomer(request.table(), request.guestCount());
@@ -80,10 +84,12 @@ public class OrderRepository {
             """, customerId, orderId);
     }
 
+    // キッチン完成と持出しを別段階で保存する。状態の条件付き更新により、完成済みの巻き戻しを拒否する。
     @Transactional
     public void updateItemStatus(Long orderItemId, StatusUpdateRequest request) {
         String requestedStatus = request.status().trim().toUpperCase(Locale.ROOT);
 
+        // 完成の再送でも最初の完成時刻を残す。この段階ではまだ提供済みにはしない。
         if ("KITCHEN_READY".equals(requestedStatus)) {
             int updated = jdbcTemplate.update("""
                 UPDATE COOKING_TASKS
@@ -98,6 +104,7 @@ public class OrderRepository {
             return;
         }
 
+        // キッチン完成後だけ持出しを許可し、提供フラグと最初の持出し時刻を同じトランザクションで記録する。
         if ("FLOOR_PICKED".equals(requestedStatus)) {
             int updated = jdbcTemplate.update("""
                 UPDATE COOKING_TASKS
@@ -168,6 +175,7 @@ public class OrderRepository {
             """, orderId);
     }
 
+    // 対象を行ロックして1個だけ取り消す。最後の1個なら調理タスクも取消し、明細が空の注文を取消状態へ揃える。
     @Transactional
     public void cancelOneItem(Long orderId, Long orderItemId) {
         Integer quantity = jdbcTemplate.queryForObject("""
@@ -202,6 +210,7 @@ public class OrderRepository {
             """, orderId, orderId);
     }
 
+    // 合算先に新しい注文を作ってから元注文を取消す。既存明細のIDや調理状態を直接移す方式ではない。
     @Transactional
     public OrderDto merge(MergeRequest request) {
         List<OrderDto> orders = request.orderIds().stream().map(this::findById).toList();
@@ -215,6 +224,7 @@ public class OrderRepository {
         return merged;
     }
 
+    // 同卓の最新のOPEN来店を再利用する。見つからない場合だけ来店レコードを新規採番する。
     private Long resolveCustomer(String tableNo, Integer guestCount) {
         List<Long> customers = jdbcTemplate.query("""
             SELECT CUSTOMER_ID FROM CUSTOMERS
@@ -243,6 +253,7 @@ public class OrderRepository {
             findItems(rs.getLong("ORDER_ID")));
     }
 
+    // 取消済みや数量0の明細を除き、調理タスクがない旧明細はWAITINGとして読み出す。
     private List<OrderItemDto> findItems(Long orderId) {
         return jdbcTemplate.query("""
             SELECT d.ORDER_DETAIL_ID AS ORDER_ITEM_ID, TO_CHAR(d.MENU_ID) AS MENU_CODE,

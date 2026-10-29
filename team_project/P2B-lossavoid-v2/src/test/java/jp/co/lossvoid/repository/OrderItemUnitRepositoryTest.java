@@ -11,6 +11,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+/**
+ * 数量分の明細・調理タスク作成と、提供済み商品も1個単位で取り消せる保存処理を検証する。
+ */
 class OrderItemUnitRepositoryTest {
     @Test
     void storesEveryUnitAsADetailAndCookingTask() {

@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 調理タスク用URLから共通のKDS画面を返す。タスク表示の内容はJavaScriptがAPIから取得する。
+ */
 @Controller
 public class CookingTaskController {
 

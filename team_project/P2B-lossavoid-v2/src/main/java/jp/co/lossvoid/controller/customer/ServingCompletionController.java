@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * お客様の注文履歴画面を表示する。このクラス自体は調理・提供状態を更新しない。
+ */
 @Controller
 public class ServingCompletionController {
 

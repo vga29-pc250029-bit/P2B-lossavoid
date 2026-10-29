@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- ランダムな料理の調理開始順を利用者が並べる練習画面。記録はCookieへ保存し、JSONへ書き出す。 -->
+
 
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script>
@@ -79,6 +81,7 @@
             .save-row { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; margin: 0; padding: 10px; background: rgba(255,255,255,.96); border-top: 1px solid var(--line); }
         }
     </style>
+<!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
 <script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
 <script defer="" src="/scheduler-simulator.js" th:src="@{/scheduler-simulator.js}"></script>
 </head>

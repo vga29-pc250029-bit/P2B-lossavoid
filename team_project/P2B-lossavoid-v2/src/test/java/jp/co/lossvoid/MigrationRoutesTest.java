@@ -29,6 +29,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+/**
+ * DB処理をモックに置き換え、画面・APIのルート、権限、コンテキストパスと主要操作を検証する。
+ */
 @WebMvcTest
 @Import(SecurityConfig.class)
 class MigrationRoutesTest {
@@ -47,6 +50,36 @@ class MigrationRoutesTest {
         for (String path : List.of("/customer/table", "/customer/menu", "/customer/cart", "/customer/history",
                 "/customer/order/confirm", "/customer/menu/2101", "/customer/menu/2101/quantity")) {
             mvc.perform(get(path)).andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void productPopupPagesKeepTheMenuAsTheirBackground() throws Exception {
+        for (String path : List.of("/customer/menu/1205", "/customer/menu/1205/quantity")) {
+            mvc.perform(get("/lossavoid" + path).contextPath("/lossavoid"))
+                .andExpect(status().isOk())
+                .andExpect(xpath("//body/@data-menu-code").string("1205"))
+                .andExpect(xpath("//*[@id='menu-grid']").exists())
+                .andExpect(xpath("//*[@id='menu-scroll']").exists())
+                .andExpect(xpath("//*[@id='category-tabs']").exists())
+                .andExpect(xpath("//*[@id='search-input']").exists())
+                .andExpect(xpath("//*[@id='qty-overlay']").exists());
+        }
+        mvc.perform(get("/customer/menu/1205/quantity"))
+            .andExpect(xpath("//body/@data-quantity-mode").string("true"));
+    }
+
+    @Test
+    void orderCartsSubmitWithoutAnExtraConfirmationPage() throws Exception {
+        for (String path : List.of("/customer/cart", "/admin/orders/cart")) {
+            mvc.perform(get("/lossavoid" + path).contextPath("/lossavoid")
+                    .with(user("admin").roles("SYSTEM_ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(xpath("//button[@id='submit-btn']/@onclick").string("submitOrder()"))
+                .andExpect(xpath("//button[@id='submit-btn']/@type").string("button"))
+                .andExpect(xpath("//button[@id='submit-btn']").string(containsString("注文する")))
+                .andExpect(content().string(not(containsString("/customer/order/confirm"))))
+                .andExpect(content().string(not(containsString("/admin/orders/confirm"))));
         }
     }
 

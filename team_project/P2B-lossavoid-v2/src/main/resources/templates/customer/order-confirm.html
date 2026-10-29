@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- 従来の確認URLから開ける注文画面。通常は注文かごから直接送信し、このURLも互換用に残す。 -->
+
 
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
 
@@ -71,6 +73,7 @@
 			<i class="fa-solid fa-basket-shopping"></i><span>注文かご</span>
 		</button>
 	</div>
+	<!-- 数量選択の共通ポップアップ。背景の一覧を残し、showクラスで開閉する。 -->
 	<div id="qty-overlay" onclick="if(event.target===this) closeQtyModal()">
 		<div id="qty-modal">
 			<div class="item-title" id="modal-item-name"></div>
@@ -93,6 +96,7 @@
 		<div class="spinner"></div>
 		<div style="font-size:14px;color:#666;font-weight:700;">読み込み中...</div>
 	</div>
+	<!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
 	<script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
 	<script src="/js/admin.js" th:src="@{/js/admin.js}"></script>
 </body>

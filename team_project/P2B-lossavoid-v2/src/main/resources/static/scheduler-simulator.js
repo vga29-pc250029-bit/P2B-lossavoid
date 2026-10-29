@@ -1,3 +1,4 @@
+// 利用者が選んだ調理開始順をブラウザーのCookieへ記録し、分析用JSONとして書き出す。練習記録をOracleへ保存しない。
 (() => {
     "use strict";
 
@@ -30,6 +31,7 @@
         }
     }
 
+    // Cookie容量を超えにくくするため項目を圧縮し、件数・符号化後の長さを見て古い記録から外す。
     function writeRecords(records) {
         const expires = new Date(Date.now() + COOKIE_DAYS * 86400000).toUTCString();
         const compact = records.slice(-MAX_RECORDS);
@@ -116,6 +118,7 @@
         } : { code: String(code), name: "不明な商品" };
     }
 
+    // 保存時は商品コードだけを持ち、JSON出力時に現在のメニューマスタから名称と工程情報を補う。
     function expandedRecord(record) {
         return {
             recordedAt: new Date(record.t).toISOString(),
@@ -163,6 +166,7 @@
         renderRecords();
     }
 
+    // 出題時の順序と利用者が選んだ開始順を、同時調理を前提にした分析用データとしてダウンロードする。
     function exportRecords() {
         const records = readRecords();
         if (!records.length) return;

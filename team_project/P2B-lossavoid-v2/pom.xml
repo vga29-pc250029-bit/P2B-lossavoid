@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Java 17のSpring Bootアプリとしてビルドするための定義。画面描画・Web API・JDBC・認証・テストの依存関係をまとめる。 -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
@@ -29,6 +31,7 @@
 	<properties>
 		<java.version>17</java.version>
 	</properties>
+	<!-- 実行時のWeb・画面・DB・認証機能と、テスト専用の依存関係を分けて定義する。 -->
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

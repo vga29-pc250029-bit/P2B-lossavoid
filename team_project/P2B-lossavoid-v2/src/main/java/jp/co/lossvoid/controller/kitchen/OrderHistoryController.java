@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 管理側の注文一覧画面と卓番別の注文APIを提供する。取消済み注文の除外はリポジトリ側で行う。
+ */
 @Controller
 public class OrderHistoryController {
     private final OrderService orderService;

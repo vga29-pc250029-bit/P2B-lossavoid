@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 提供済み商品の確認画面を表示する。対応する画面側処理が履歴を絞り込んで表示する。
+ */
 @Controller
 public class ServingStatusController {
 

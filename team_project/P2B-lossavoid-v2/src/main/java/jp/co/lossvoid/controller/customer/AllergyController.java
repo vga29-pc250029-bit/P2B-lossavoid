@@ -8,6 +8,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * 公式アレルゲン情報を画面へ中継するAPI。外部取得の失敗は502として通知し、正常な空データと区別する。
+ */
 @RestController
 @RequestMapping("/api/allergens")
 public class AllergyController {

@@ -1,3 +1,4 @@
+-- 旧ORDER_APP向けの商品データの参照資料。現行アプリの初期投入SQLとしてそのまま実行しない。
 -- Legacy ORDER_APP data. Do not run this against lossavoid.
 DECLARE
     column_count NUMBER;

@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- KDS本体。新しい注文、整理した調理予定、キッチン完成とフロア持出しの操作を表示する。 -->
+
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta content="/" name="app-root" th:content="@{/}"/>
@@ -80,6 +82,7 @@
     </div>
 </div>
 
+<!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
 <script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
 <script src="/js/kitchen-clock.js" th:src="@{/js/kitchen-clock.js}"></script>
 <script src="/kitchen-scheduler.js" th:src="@{/kitchen-scheduler.js}"></script>

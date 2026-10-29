@@ -1,3 +1,4 @@
+-- 新しいLOSSAVOID環境向けの7表・外部キー・索引・採番の定義。業務データは登録しない。通常起動時のSQL自動初期化とは分けて使う。
 -- Fresh lossavoid schema only. Existing installations use db/lossavoid-upgrade.sql.
 -- No menu, staff, store, or order data is seeded.
 CREATE TABLE CUSTOMERS (
@@ -32,6 +33,7 @@ CREATE TABLE ORDERS (
     CONSTRAINT FK_ORDERS_CUSTOMER FOREIGN KEY (CUSTOMER_ID) REFERENCES CUSTOMERS (CUSTOMER_ID)
 );
 
+-- 商品を1個単位で管理する明細。取消済みは数量0として残せるため、履歴の物理削除とは区別する。
 CREATE TABLE ORDER_DETAILS (
     ORDER_DETAIL_ID NUMBER(10) PRIMARY KEY,
     ORDER_ID NUMBER(10) NOT NULL,
@@ -46,6 +48,7 @@ CREATE TABLE ORDER_DETAILS (
     CONSTRAINT FK_DETAILS_MENU FOREIGN KEY (MENU_ID) REFERENCES MENUS (MENU_ID)
 );
 
+-- 注文詳細IDを参照する調理タスク。対応する親明細が存在しないデータは外部キーで登録できない。
 CREATE TABLE COOKING_TASKS (
     TASK_ID NUMBER(10) PRIMARY KEY,
     ORDER_DETAIL_ID NUMBER(10) NOT NULL,
@@ -65,6 +68,7 @@ CREATE TABLE STORES (
     ENABLED NUMBER(1) NOT NULL
 );
 
+-- 認証情報は平文ではなくハッシュで保存する。従業員コードの大文字小文字の重複は下の索引で防ぐ。
 CREATE TABLE STAFFS (
     STAFF_ID NUMBER(10) PRIMARY KEY,
     STORE_ID NUMBER(10) NOT NULL,

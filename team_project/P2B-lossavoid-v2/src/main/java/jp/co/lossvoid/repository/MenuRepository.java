@@ -8,6 +8,9 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+/**
+ * OracleのMENUSを画面用DTOへ変換し、在庫を更新する。数値の商品IDは画面側では文字列コードとして扱う。
+ */
 @Repository
 public class MenuRepository {
     private final JdbcTemplate jdbcTemplate;
@@ -36,10 +39,12 @@ public class MenuRepository {
             ));
     }
 
+    // 日本語の商品名を画像ファイル名として使うため、URLのパス部分としてエンコードする。
     private String imageUrl(String menuName) {
         return "/images/" + URLEncoder.encode(menuName, StandardCharsets.UTF_8).replace("+", "%20") + ".png";
     }
 
+    // nullは値のクリアではなく変更なしとして扱う。品切れフラグはOracleの0・1へ変換する。
     public void updateStock(String menuCode, Integer stockQty, Boolean soldOut) {
         jdbcTemplate.update("""
             UPDATE MENUS

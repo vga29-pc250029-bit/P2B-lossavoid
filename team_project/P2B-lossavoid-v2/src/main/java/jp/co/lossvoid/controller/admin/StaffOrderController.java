@@ -6,6 +6,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+/**
+ * 従業員・管理者の各画面を返す入口。画面の表示と、注文を保存するAPI処理は分離している。
+ */
 @Controller
 public class StaffOrderController {
 

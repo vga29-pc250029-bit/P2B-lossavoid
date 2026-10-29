@@ -1,3 +1,4 @@
+/* お客様向け画面の共通レイアウト。本文内のスクロール領域と、画面に重ねるポップアップ・注文かごの見た目を定義する。 */
 
         * { box-sizing: border-box; }
         html, body {
@@ -245,6 +246,7 @@
         .empty-result { text-align: center; color: #999; padding: 60px 20px; grid-column: 1/-1; }
 
         /* ---- Allergy information modal ---- */
+        /* 情報ポップアップは本文の配置から外し、showが付くまでは透明かつ操作不可にする。 */
         #info-overlay {
             position: fixed;
             inset: 0;
@@ -322,6 +324,7 @@
         .info-source-note a { color: #237531; font-weight: 800; text-decoration: underline; }
 
         /* ---- Qty modal ---- */
+        /* 数量選択は背景のメニュー一覧を残して画面下へ重ねる。別の白いページを作るための領域ではない。 */
         #qty-overlay {
             position: fixed; inset: 0;
             background: rgba(0,0,0,0.45);

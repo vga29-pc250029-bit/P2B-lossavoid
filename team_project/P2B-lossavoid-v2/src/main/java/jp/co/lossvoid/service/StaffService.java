@@ -13,6 +13,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
 
+/**
+ * 従業員入力の正規化とパスワードのハッシュ化を行う。重複コードや更新対象なしをHTTPエラーへ変換する。
+ */
 @org.springframework.stereotype.Service
 public class StaffService {
     private final StaffRepository staffRepository;
@@ -28,6 +31,7 @@ public class StaffService {
     }
 
 
+    // 新規登録のパスワードは必須。平文をリポジトリへ渡さず、設定されたエンコーダーでハッシュ化する。
     public StaffDto createStaff(@Valid StaffRequest request) {
         if (request.password() == null || request.password().length() < 4) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "パスワードは4文字以上で入力してください");
@@ -41,6 +45,7 @@ public class StaffService {
         }
     }
 
+    // 更新時の空パスワードは変更なし。更新対象のコードはURLを正規化した値で固定する。
     public StaffDto updateStaff(String code, @Valid StaffRequest request) {
         String normalizedCode = normalizeCode(code);
         if (request.password() != null && !request.password().isBlank() && request.password().length() < 4) {

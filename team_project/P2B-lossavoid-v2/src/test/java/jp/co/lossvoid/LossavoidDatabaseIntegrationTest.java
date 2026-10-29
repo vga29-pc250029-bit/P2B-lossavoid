@@ -20,6 +20,9 @@ import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.test.context.transaction.BeforeTransaction;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 明示的に有効化した場合だけ実Oracleで連携を検証する。行更新は戻すが採番や起動時DDLは戻らないため、専用検証DBで実行する。
+ */
 @SpringBootTest
 @Transactional
 @EnabledIfEnvironmentVariable(named = "LOSSAVOID_DB_TEST", matches = "true")

@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 数量選択URLを直接開く場合の入口。商品コードと数量選択モードを渡し、一覧を背景にポップアップを開く。
+ */
 @Controller
 public class CartAddController {
 

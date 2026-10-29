@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- 登録済み注文の取消を扱う画面。注文全体と商品の取消はそれぞれのAPIへ送信する。 -->
+
 
 <html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>注文取消</title><link href="/css/admin.css" rel="stylesheet" th:href="@{/css/admin.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-cart"><div class="page" id="view-cart">
 <div class="header-blue">
@@ -48,7 +50,9 @@
 <div class="cart-badge hidden" id="cart-badge">0</div>
 <i class="fa-solid fa-basket-shopping"></i><span>注文かご</span>
 </button>
-</div><div id="qty-overlay" onclick="if(event.target===this) closeQtyModal()">
+</div>
+<!-- 数量選択の共通ポップアップ。背景の一覧を残し、showクラスで開閉する。 -->
+<div id="qty-overlay" onclick="if(event.target===this) closeQtyModal()">
 <div id="qty-modal">
 <div class="item-title" id="modal-item-name"></div>
 <div class="item-price" id="modal-item-price"></div>
@@ -65,4 +69,6 @@
 </div><div id="toast"></div><div id="loading-overlay">
 <div class="spinner"></div>
 <div style="font-size:14px;color:#666;font-weight:700;">読み込み中...</div>
-</div><script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/admin.js" th:src="@{/js/admin.js}"></script></body></html>
+</div>
+<!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
+<script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script><script src="/js/admin.js" th:src="@{/js/admin.js}"></script></body></html>

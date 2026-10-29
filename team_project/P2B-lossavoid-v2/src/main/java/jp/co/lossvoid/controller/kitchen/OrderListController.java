@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * KDS画面とその注文取得APIを提供する。調理順の計算は画面側のスケジューラーが行う。
+ */
 @Controller
 public class OrderListController {
     private final OrderService orderService;

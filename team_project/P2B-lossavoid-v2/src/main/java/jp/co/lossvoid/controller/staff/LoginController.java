@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 認証済み利用者のログイン案内と、ユーザー名・権限を返すAPI。パスワードの照合はSpring Securityが担当する。
+ */
 @Controller
 public class LoginController {
 

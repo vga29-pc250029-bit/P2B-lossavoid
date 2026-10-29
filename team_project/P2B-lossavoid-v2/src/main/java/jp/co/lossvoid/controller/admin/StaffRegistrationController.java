@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
+/**
+ * 担当者一覧・登録画面と従業員の取得・登録APIを提供する。入力検証後の登録処理はStaffServiceへ渡す。
+ */
 @Controller
 public class StaffRegistrationController {
     private final StaffService staffService;
@@ -26,6 +29,7 @@ public class StaffRegistrationController {
     @GetMapping("/admin/staff/register")
     public String register() { return "customer/staff-register"; }
 
+    // この画面ルートは確認用テンプレートを返すだけ。実際の登録は下のJSON APIが担当する。
     @PostMapping("/admin/staff/register")
     public String registerStaff() { return "customer/staff-confirm"; }
 

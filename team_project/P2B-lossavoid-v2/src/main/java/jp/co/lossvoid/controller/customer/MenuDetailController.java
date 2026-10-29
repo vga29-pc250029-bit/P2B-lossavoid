@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 商品詳細URLの商品コードをテンプレートへ渡す。商品情報の取得とポップアップ表示はcustomer.jsが行う。
+ */
 @Controller
 public class MenuDetailController {
     private final MenuRepository menuRepository;

@@ -1,3 +1,4 @@
+/* 卓番・人数入力の見た目とスマートフォン向けの操作領域。値の検証と確定はcustomer.jsで行う。 */
 body {
     margin: 0;
     display: flex;
@@ -309,6 +310,7 @@ body {
     font-weight: 700;
 }
 
+/* 狭い画面では人数の候補を3列にし、入力値と増減ボタンの幅を確保する。 */
 @media (max-width: 420px) {
     .guest-scroll { padding: 16px 20px max(20px, env(safe-area-inset-bottom)); }
     .guest-heading { margin-top: 20px; margin-bottom: 16px; }

@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * ログアウト画面と、次回管理画面で再認証を促すCookieの設定APIを提供する。
+ */
 @Controller
 public class LogoutController {
 

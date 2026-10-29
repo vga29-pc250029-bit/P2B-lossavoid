@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 調理順を扱うKDS画面と、作業順を記録するシミュレーター画面への入口。
+ */
 @Controller
 public class CookingPriorityController {
 

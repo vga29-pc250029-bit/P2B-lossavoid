@@ -1,3 +1,4 @@
+// 注文APIの情報をKDSへ描画し、整理済み計画とキッチン完成・フロア持出しを管理する。計画は端末内、実際の状態と時刻はAPI経由で保存する。
 const cookMap = {};
 let latestOrders = [];
 const PLAN_STORAGE_KEY = "lossavoid:kds:organized-plan:v3";
@@ -74,6 +75,7 @@ function recipeFor(item) {
     });
 }
 
+// Oracleの応答を画面側の時刻形式と3段階の作業状態へ変換する。完成済み・未持出しを提供済みと混同しない。
 function normalizeOracleOrder(order) {
     const createdDate = new Date(order.createdAt);
     return {
@@ -172,6 +174,7 @@ function stampScheduleItems(items, baseAtMs) {
     }));
 }
 
+// 投入済み計画の占有枠と完成予定を再整理へ渡し、同じ設備への二重投入や同卓の完成ずれを抑える。
 function buildLockedPlanConstraints(lockedItems, nowMs) {
     const fixedReservations = [];
     const resourceNotBeforeSeconds = {};
@@ -436,6 +439,7 @@ function buildScheduleInput() {
         }));
 }
 
+// 投入時刻に達した項目は固定し、残りだけを計算し直す。整理結果は端末内に保存し、注文状態そのものは変えない。
 document.getElementById("organize-btn").addEventListener("click", () => {
     const input = buildScheduleInput();
     if (!input.length) {
@@ -489,6 +493,7 @@ document.getElementById("delete-btn").addEventListener("click", () => {
     renderOrganizedPanel();
 });
 
+// 同じ明細・操作の多重送信を抑え、成功後に注文情報を再取得する。完成と持出しの時刻はサーバーで記録する。
 async function runWorkflowAction(itemId, action) {
     const key = `${itemId}:${action}`;
     if (actionInFlight.has(key)) return;
@@ -517,6 +522,7 @@ organizedOrders.addEventListener("click", event => {
     runWorkflowAction(button.dataset.itemId, button.dataset.action);
 });
 
+// 完成から30秒以上持出しを待つ料理を目立たせる。表示の更新だけでDBの時刻は書き換えない。
 function updateCounterWaitingClocks() {
     const now = Date.now();
     let overdueCount = 0;
@@ -680,6 +686,7 @@ restoreOrganizedPlan();
 await loadCookList();
 await refreshOrders();
 
+// SSE通知で即時に再取得し、5秒間隔の取得も併用する。画面の経過時間表示は1秒間隔で更新する。
 const kitchenEvents = new EventSource(window.oracleApi.kitchenStreamUrl);
 kitchenEvents.addEventListener("kitchen-update", refreshOrders);
 kitchenEvents.addEventListener("connected", refreshOrders);

@@ -11,6 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * お客様の注文かご画面を返す。かごの内容はcustomer.jsがブラウザー内の状態から表示する。
+ */
 @Controller
 public class CartController {
 

@@ -18,6 +18,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 
+/**
+ * 初期管理者とDB上の従業員をHTTP Basicで認証し、担当者管理などのURLに権限を設定する。
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -33,6 +36,7 @@ public class SecurityConfig {
         @Value("${app.security.admin.username}") String adminUsername,
         @Value("${app.security.admin.password}") String adminPassword
     ) {
+        // 設定の初期管理者を先に照合する。従業員は有効かつハッシュ登録済みのDBレコードだけを認証対象にする。
         String adminHash = passwordEncoder.encode(adminPassword);
         return username -> {
             if (adminUsername.equalsIgnoreCase(username)) {
@@ -55,6 +59,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // 既存仕様ではHTTP Basicを使いセッションを作成しない。CSRF設定と保護するURLの変更は別途セキュリティ確認が必要。
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

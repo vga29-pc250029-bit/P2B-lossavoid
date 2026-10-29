@@ -1,3 +1,4 @@
+// 設備ごとの投入枠と同卓の完成時刻を考慮して、着手予定を計算する。全組合せの最適解を保証する方式ではなく、反復回数と完成差を結果に含める。
 (function (root, factory) {
     const api = factory();
     if (typeof module === "object" && module.exports) module.exports = api;
@@ -42,6 +43,7 @@
         return String(item.code ?? item.menuCode ?? "").trim();
     }
 
+    // 商品ごとに設備・所要秒数・鉄板枚数・周回数を決める。未登録商品の推定や暫定工程は実測済みの値と区別する。
     function resolveRecipe(item) {
         const code = normalizeCode(item);
         const category = String(item.menuCategory || item.category || "").toLowerCase();
@@ -190,6 +192,7 @@
         return stableCompare(a.itemId ?? a.itemIndex, b.itemId ?? b.itemIndex);
     }
 
+    // 同卓の最長工程から短い料理の開始希望時刻をずらす。全設備で卓の優先順を共通にして同期の循環を防ぐ。
     function prepare(items, nowMs, settings) {
         const enriched = items.map((item, index) => ({
             ...item,
@@ -278,6 +281,7 @@
         return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
     }
 
+    // 既に投入された枠を予約として読み込み、左右の容量と投入間隔に矛盾がある予約は拒否する。
     function fixedReservations(settings, resource, feedSeconds) {
         if (!Array.isArray(settings.fixedReservations)) return [];
         const byTime = new Map();
@@ -365,6 +369,7 @@
         return true;
     }
 
+    // 予約の境界を候補にして投入可能な最早時刻を探し、無制限な時刻刻みの探索を避ける。
     function earliestFeasibleStart(task, minimumStartSeconds, slots, feedSeconds) {
         const minimum = Math.max(0, minimumStartSeconds);
         const offsets = passStarts(task, 0);
@@ -416,6 +421,7 @@
         return { starts, lanes };
     }
 
+    // 数量分の物理的な鉄板と複数周回を配置し、表示時には元の明細単位へ集約する。
     function scheduleOven(tasks, resource, feedSeconds, settings) {
         // One order-detail row may represent several physical trays. Expand it
         // only inside the oven model, then collapse it back to one KDS row.
@@ -539,6 +545,7 @@
         return scheduled;
     }
 
+    // オーブン以外は開始可能時刻の下限を守るモデル。未計測の人員・設備容量を厳密に再現する処理ではない。
     function scheduleOther(tasks, resource, settings) {
         const notBefore = resourceNotBeforeSeconds(settings, resource);
         return [...tasks]
@@ -621,6 +628,7 @@
         };
     }
 
+    // 設備別の最終完成を卓ごとに揃えるよう反復する。混雑時の許容差と反復上限を設け、収束しない場合も情報を返す。
     function synchronizeTables(tasks, settings) {
         const requestedLimit = Number(settings.maxSyncIterations);
         const maximumIterations = Number.isInteger(requestedLimit) && requestedLimit > 0 ?
@@ -729,6 +737,7 @@
         };
     }
 
+    // 外部へ公開する計算入口。入力から作業予定と前提条件を返し、DBの注文や実際の調理状態は変更しない。
     function scheduleKitchenItems(items, options = {}) {
         if (!Array.isArray(items) || items.length === 0) {
             return {
