@@ -12,7 +12,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 従業員コードを指定した更新・削除APIと編集画面を提供する。利用権限はSecurityConfigで制限する。
+ * 担当者コードを指定した更新・削除APIと編集画面を提供する。店舗内LANでの利用を前提とする。
  */
 @Controller
 public class StaffUpdateController {

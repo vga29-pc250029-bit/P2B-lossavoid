@@ -28,19 +28,99 @@
 
     const CHICKEN_FINISH_CODES = new Set(["2402", "2404"]);
     const HAMBURGER_CODES = new Set(["2403", "2406", "2407"]);
+    const DORIA_CODES = new Set(["2101", "2103", "2108", "2110", "2115"]);
+    const SALAD_TOPPINGS = new Map([["1202", "小エビ"], ["1205", "わかめ"], ["1209", "チキン"]]);
+    const PHASE_LABELS = {
+        PREP: "準備", TOPPING: "盛付", DRESSING: "ドレッシング", FINISH: "仕上げ",
+        IN: "イン", HEAT: "加熱", OUT: "アウト", SERVE: "提供"
+    };
 
     const RESOURCE_ORDER = {
         OVEN_LOWER: 0,
         OVEN_UPPER: 1,
         PASTA: 2,
         HEAT: 3,
-        FLOOR_PREP: 4,
-        OTHER: 5
+        HOT_PLATING: 4,
+        COLD_PREP: 5,
+        FLOOR_PREP: 6,
+        OTHER: 7
     };
     const STABLE_COLLATOR = new Intl.Collator("ja", { numeric: true });
 
     function normalizeCode(item) {
         return String(item.code ?? item.menuCode ?? "").trim();
+    }
+
+    // 手作業の時間は未計測のまま保持し、機器の加熱時間や「0秒」と混同しない。
+    function withSteps(recipe, definitions) {
+        const steps = definitions.map((step, index) => ({
+            ...step,
+            phaseLabel: PHASE_LABELS[step.phase],
+            kind: step.phase === "HEAT" ? "equipment" : (step.phase === "SERVE" ? "handoff" : "manual"),
+            durationSeconds: step.durationSeconds ?? null,
+            dependsOn: index === 0 ? [] : [definitions[index - 1].id]
+        }));
+        return {
+            ...recipe,
+            steps,
+            hasUntimedManualSteps: steps.some(step => step.kind === "manual" && step.durationSeconds === null)
+        };
+    }
+
+    function detailedRecipe(code, fallbackMinutes) {
+        const topping = SALAD_TOPPINGS.get(code);
+        if (topping) {
+            return withSteps({
+                resource: "COLD_PREP", resourceLabel: "サラダ盛付",
+                durationSeconds: Math.round(fallbackMinutes * 60),
+                durationSource: "menu-master-estimate", provisional: true,
+                trayUnits: 1, passes: 1,
+                instruction: `${topping}をのせ、ドレッシング6周、パプリカパウダー`
+            }, [
+                { id: "salad-base", phase: "PREP", instruction: "サラダのベースを用意する" },
+                { id: "salad-topping", phase: "TOPPING", instruction: `${topping}をのせる` },
+                { id: "salad-dressing", phase: "DRESSING", instruction: "ドレッシングを6周かける", repetitions: 6 },
+                { id: "salad-paprika", phase: "FINISH", instruction: "パプリカパウダーをかける" },
+                { id: "serve", phase: "SERVE", instruction: "提供する" }
+            ]);
+        }
+        if (code === "1301") {
+            return withSteps({
+                resource: "HOT_PLATING", resourceLabel: "温製スープ盛付",
+                durationSeconds: Math.round(fallbackMinutes * 60),
+                durationSource: "menu-master-estimate", provisional: true,
+                trayUnits: 1, passes: 1,
+                instruction: "温まっている個包装のスープを皿に入れる"
+            }, [
+                { id: "warm-packet", phase: "PREP", instruction: "温まっている個包装のスープを用意する" },
+                { id: "plate-soup", phase: "TOPPING", instruction: "個包装のスープを皿に入れる" },
+                { id: "serve", phase: "SERVE", instruction: "提供する" }
+            ]);
+        }
+        if (!DORIA_CODES.has(code)) return null;
+        const steps = [{ id: "prepared-dish", phase: "PREP", instruction: "事前準備品を用意する" }];
+        if (code === "2108") {
+            steps.push(
+                { id: "pizza-cheese", phase: "TOPPING", instruction: "ピザチーズをのせる" },
+                { id: "powdered-cheese", phase: "TOPPING", instruction: "粉チーズをのせる" }
+            );
+        }
+        steps.push(
+            { id: "oven-in", phase: "IN", instruction: "下段オーブンへ入れる" },
+            { id: "oven-heat", phase: "HEAT", instruction: "下段オーブンで加熱する", durationSeconds: 330 },
+            { id: "oven-out", phase: "OUT", instruction: "オーブンから取り出す" }
+        );
+        if (code === "2103") {
+            steps.push({ id: "soft-egg", phase: "FINISH", instruction: "半熟卵をのせる" });
+        }
+        steps.push({ id: "serve", phase: "SERVE", instruction: "提供する" });
+        return withSteps({
+            resource: "OVEN_LOWER", resourceLabel: "下段オーブン 5:30",
+            durationSeconds: 330, durationSource: "equipment-only",
+            trayUnits: 1, passes: 1,
+            instruction: code === "2103" ? "イン → アウト → 半熟卵をのせる" :
+                (code === "2108" ? "ピザチーズ・粉チーズ → イン → アウト" : "事前準備品をイン → アウト")
+        }, steps);
     }
 
     // 商品ごとに設備・所要秒数・鉄板枚数・周回数を決める。未登録商品の推定や暫定工程は実測済みの値と区別する。
@@ -49,6 +129,8 @@
         const category = String(item.menuCategory || item.category || "").toLowerCase();
         const station = String(item.station || item.prepStation || "").toLowerCase();
         const fallbackMinutes = Math.max(0.5, Number(item.cookTime) || 0.5);
+        const detailed = detailedRecipe(code, fallbackMinutes);
+        if (detailed) return detailed;
 
         if (LOWER_OVEN_CODES.has(code)) {
             return {
@@ -755,7 +837,8 @@
                     syncConverged: true,
                     syncIterations: 0,
                     syncIterationLimit: 0,
-                    syncStopReason: "converged"
+                    syncStopReason: "converged",
+                    hasUntimedManualSteps: false
                 }
             };
         }
@@ -827,7 +910,9 @@
                     Object.keys(settings.tableTargetFinishSeconds || {}).length,
                 resourceNotBeforeSeconds: settings.resourceNotBeforeSeconds || 0,
                 fixedReservationCount: Array.isArray(settings.fixedReservations) ?
-                    settings.fixedReservations.length : 0
+                    settings.fixedReservations.length : 0,
+                // 工程未計測の料理は、既存のマスタ目安または機器時間だけで同期を計算する。
+                hasUntimedManualSteps: resultItems.some(item => item.recipe.hasUntimedManualSteps)
             }
         };
     }

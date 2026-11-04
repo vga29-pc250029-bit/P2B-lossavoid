@@ -7,6 +7,7 @@ let ordersRefreshing = false;
 const actionInFlight = new Set();
 const seenRawOrderIds = new Set();
 const seenWorkflowKeys = new Set();
+const openRecipeDetails = new Set();
 
 const orderContainer = document.getElementById("orderContainer");
 const organizedOrders = document.getElementById("organizedOrders");
@@ -23,6 +24,28 @@ function escapeHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+// 5秒ごとの再取得で工程の展開状態を閉じないよう、表示場所と明細IDで区別して保持する。
+document.addEventListener("toggle", event => {
+    const details = event.target;
+    if (!details.matches?.("details[data-recipe-key]")) return;
+    if (details.open) openRecipeDetails.add(details.dataset.recipeKey);
+    else openRecipeDetails.delete(details.dataset.recipeKey);
+}, true);
+
+function recipeStepsHtml(recipe, itemId, location) {
+    if (!Array.isArray(recipe.steps) || !recipe.steps.length) return "";
+    const key = `${location}:${itemId}`;
+    return `<details class="workflow-steps" data-recipe-key="${escapeHtml(key)}" ${openRecipeDetails.has(key) ? "open" : ""}>
+        <summary>作業工程 <span>${recipe.steps.length}工程</span></summary>
+        <ol>${recipe.steps.map(step => `<li data-step-id="${escapeHtml(step.id)}" data-phase="${escapeHtml(step.phase)}">
+            <span class="step-phase">${escapeHtml(step.phaseLabel)}</span>
+            ${escapeHtml(step.instruction)}
+            ${step.durationSeconds === null ? "" : `<span class="step-duration">${escapeHtml(formatElapsed(step.durationSeconds))}</span>`}
+        </li>`).join("")}</ol>
+        ${recipe.hasUntimedManualSteps ? '<div class="workflow-time-note">手作業時間：未計測</div>' : ""}
+    </details>`;
 }
 
 function isKitchenTarget(cookInfo) {
@@ -261,6 +284,7 @@ function rawItemHtml(item, cookInfo) {
             <span class="raw-item-name">${escapeHtml(item.qty)} ${escapeHtml(displayName)}</span>
             <span class="recipe-chip">${escapeHtml(item.recipe.resourceLabel)}</span>
             ${stateHtml}
+            ${recipeStepsHtml(item.recipe, item.id, "raw")}
         </div>`;
 }
 
@@ -295,9 +319,8 @@ function renderRawOrders() {
         seenRawOrderIds.add(String(order.id));
     });
 
-    orderContainer.innerHTML = cards.length
-        ? cards.join("")
-        : `<div class="empty-panel">未完了のキッチン伝票はありません</div>`;
+    // 注文がないときは元画面と同じ空の伝票領域にする。取得失敗はrefreshOrdersで別表示する。
+    orderContainer.innerHTML = cards.join("");
 }
 
 function counterRowHtml(entry, animate = false) {
@@ -314,13 +337,15 @@ function counterRowHtml(entry, animate = false) {
             <div class="workflow-main">
                 <div class="workflow-title">${escapeHtml(formatTableNo(order.table))}卓　${escapeHtml(item.qty)} ${escapeHtml(name)}</div>
                 <div class="workflow-meta">${escapeHtml(item.recipe.resourceLabel)}・完成 ${escapeHtml(formatClock(item.kitchenReadyAtMs))}</div>
+                ${recipeStepsHtml(item.recipe, item.id, "counter")}
             </div>
             <button class="kitchen-ready-button is-done" type="button" disabled>完成済</button>
         </article>`;
 }
 
 function planRowHtml(planItem, current, animate = false) {
-    const recipe = planItem.recipe || current.item.recipe;
+    // 保存済みの古い整理結果にも、最新の工程定義を表示する。予定時刻そのものは変えない。
+    const recipe = current.item.recipe.steps ? current.item.recipe : (planItem.recipe || current.item.recipe);
     const feedEvents = Array.isArray(planItem.ovenFeedEvents) ? planItem.ovenFeedEvents : [];
     const ovenSlot = recipe.resource === "OVEN_UPPER" || recipe.resource === "OVEN_LOWER"
         ? (feedEvents.length > 1
@@ -342,7 +367,7 @@ function planRowHtml(planItem, current, animate = false) {
             <div class="workflow-main">
                 <div class="workflow-title"><span class="sequence-number">${escapeHtml(planItem.sequence)}</span>${escapeHtml(formatTableNo(current.order.table))}卓　${escapeHtml(current.item.qty)} ${escapeHtml(current.cookInfo.shortName || current.item.name)}</div>
                 <div class="workflow-meta"><strong class="plan-start-label">${escapeHtml(planStartText(Number(planItem.scheduledStartAtMs)))}</strong>・${escapeHtml(recipe.resourceLabel)}・${escapeHtml(ovenSlot)}</div>
-                <div class="workflow-instruction">${escapeHtml(recipe.instruction)}</div>
+                ${recipe.steps ? recipeStepsHtml(recipe, current.item.id, "plan") : `<div class="workflow-instruction">${escapeHtml(recipe.instruction)}</div>`}
                 ${feedHtml}
             </div>
             <button class="kitchen-ready-button" type="button"
@@ -392,10 +417,7 @@ function renderOrganizedPanel() {
         html += `<section class="workflow-section"><h2>整理後の調理順 <span>${pendingPlan.length}品</span></h2>${pendingHtml}</section>`;
     }
     if (unscheduledCount > 0) {
-        html += `<div class="organize-notice">未整理 ${unscheduledCount}品 — 「整理」を押して最新順序を作成</div>`;
-    }
-    if (!html) {
-        html = `<div class="empty-panel strong">「整理」を押すと、上下オーブンの左右2枚と同時調理を考慮して作業順を表示します</div>`;
+        html += `<div class="organize-notice">未整理 ${unscheduledCount}品</div>`;
     }
     organizedOrders.innerHTML = html;
     updateWorkflowClocks();
@@ -467,10 +489,13 @@ document.getElementById("organize-btn").addEventListener("click", () => {
     const syncNote = schedule.exact === false
         ? `（同卓の完成差 最大${formatElapsed(schedule.syncSpreadSeconds || 0)}）`
         : "";
+    const hasUntimedManualSteps = getActiveItems().some(({ item }) =>
+        item.workflowState === "PENDING" && item.recipe.hasUntimedManualSteps);
+    const timingNote = hasUntimedManualSteps ? "（手作業時間は未計測）" : "";
     showMessage((locked.length
         ? `投入済み${locked.length}品を固定し、残り${schedulable.length}品を再整理しました`
-        : `${organizedPlan.length}品の作業順を更新しました`) + syncNote,
-    schedule.exact === false ? "warning" : "info");
+        : `${organizedPlan.length}品の作業順を更新しました`) + syncNote + timingNote,
+    schedule.exact === false || hasUntimedManualSteps ? "warning" : "info");
     organizedPlan.sort((a, b) =>
         (Number(a.scheduledStartAtMs) || 0) - (Number(b.scheduledStartAtMs) || 0) ||
         Number(a.itemId) - Number(b.itemId));

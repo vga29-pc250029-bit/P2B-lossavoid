@@ -406,24 +406,6 @@
             line-height: 1.2;
         }
         .home-header .htitle i { margin: 0 6px; }
-        .logout-btn {
-            position: absolute;
-            right: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 42px;
-            height: 42px;
-            border: 1px solid rgba(13, 60, 79, 0.28);
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.45);
-            color: #0d3c4f;
-            display: grid;
-            place-items: center;
-            font-size: 19px;
-            cursor: pointer;
-        }
-        .logout-btn:active { background: rgba(255, 255, 255, 0.78); }
-        .logout-btn:focus-visible { outline: 3px solid #0d3c4f; outline-offset: 2px; }
         .home-body {
             flex: 1;
             overflow: hidden;
@@ -465,9 +447,8 @@
             gap: 10px;
         }
         @media (max-width: 360px) {
-            .home-header .htitle { font-size: 19px; padding-right: 38px; }
+            .home-header .htitle { font-size: 19px; }
             .home-header .htitle i { margin: 0 3px; }
-            .logout-btn { right: 9px; width: 38px; height: 38px; }
             .home-body { padding: 24px 14px; }
             .tile-grid { gap: 12px; }
             .home-tile i { margin-bottom: 12px; }
@@ -605,4 +586,3 @@
         .staff-badge { display: inline-block; border-radius: 20px; padding: 2px 8px; font-size: 10px; font-weight: 800; }
         .staff-badge.enabled { background: #e8f5e9; color: #237a35; }
         .staff-badge.disabled { background: #eef1f4; color: #6b7280; }
-    

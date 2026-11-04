@@ -1,4 +1,4 @@
-// 従業員注文、注文済み商品の取消、卓番変更・合算、在庫・担当者管理を操作する。画面の表示制御とは別にサーバー側でも認可する。
+// 店舗内LAN向けの注文、取消、卓番変更・合算、在庫・担当者管理を操作する。ログイン認証は行わない。
 const v2StaffKey = 'p2b-v2:staff-cart';
 let v2StaffState;
 try { v2StaffState = JSON.parse(sessionStorage.getItem(v2StaffKey) || '{}'); } catch { v2StaffState = {}; }
@@ -279,10 +279,6 @@ window.addEventListener('pagehide', saveStaffState);
     const FOOTER_PAGES = ['view-menu', 'view-cart'];
     function showPage(pageId, initial = false) {
         const routes = {'view-home':'/admin','view-menu':'/admin/orders/new','view-cart':'/admin/orders/cart','view-staff':'/admin/staff','view-stock':'/admin/stock','view-allergy':'/admin/allergens','view-tablemove':'/admin/orders/edit','view-merge':'/admin/orders/merge'};
-        if (pageId === 'view-staff' && authenticatedUser?.role !== 'SYSTEM_ADMIN') {
-            showToast('システム管理者のみ利用できます');
-            return;
-        }
         if (!initial && routes[pageId] !== window.orderAppRoute()) {
             saveStaffState();
             location.assign(window.orderAppPath(routes[pageId]));
@@ -880,7 +876,6 @@ window.addEventListener('pagehide', saveStaffState);
     // =====================================================================
     let staffList = [];
     let editingStaffCode = '';
-    let authenticatedUser = null;
 
     function staffEscape(value) {
         return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -919,31 +914,19 @@ window.addEventListener('pagehide', saveStaffState);
         }).join('');
     }
 
-    // 新規登録と既存編集を同じフォームで扱い、パスワードの空欄の意味をモードごとに分ける。
+    // 新規登録と既存編集を同じ担当者フォームで扱う。
     async function saveStaff(event) {
         event.preventDefault();
         const codeInput = document.getElementById('staff-reg-code');
         const nameInput = document.getElementById('staff-reg-name');
-        const passwordInput = document.getElementById('staff-reg-password');
         const code = codeInput.value.trim().toUpperCase();
         const name = nameInput.value.trim();
-        const password = passwordInput.value;
         if (!/^[A-Z0-9_-]{1,20}$/.test(code)) {
             showToast('従業員コードは英数字・ハイフン・下線で入力してください');
             codeInput.focus();
             return;
         }
         if (!name) { showToast('氏名を入力してください'); nameInput.focus(); return; }
-        if (!editingStaffCode && password.length < 4) {
-            showToast('パスワードは4文字以上で入力してください');
-            passwordInput.focus();
-            return;
-        }
-        if (editingStaffCode && password && password.length < 4) {
-            showToast('変更するパスワードは4文字以上で入力してください');
-            passwordInput.focus();
-            return;
-        }
 
         const button = document.getElementById('staff-save-btn');
         button.disabled = true;
@@ -951,7 +934,6 @@ window.addEventListener('pagehide', saveStaffState);
             const data = {
                 code,
                 name,
-                password,
                 role: document.getElementById('staff-reg-role').value,
                 enabled: document.getElementById('staff-reg-enabled').checked
             };
@@ -981,11 +963,9 @@ window.addEventListener('pagehide', saveStaffState);
         document.getElementById('staff-reg-code').value = staff.code;
         document.getElementById('staff-reg-code').readOnly = true;
         document.getElementById('staff-reg-name').value = staff.name;
-        document.getElementById('staff-reg-password').value = '';
         document.getElementById('staff-reg-role').value = staff.role === 'SYSTEM_ADMIN' ? 'SYSTEM_ADMIN' : 'EMPLOYEE';
         document.getElementById('staff-reg-enabled').checked = !!staff.enabled;
         document.getElementById('staff-form-title').textContent = '担当者情報を編集';
-        document.getElementById('staff-password-help').textContent = '空欄のまま更新すると現在のパスワードを維持します';
         document.getElementById('staff-save-btn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 更新する';
         document.getElementById('staff-save-btn').classList.remove('single');
         document.getElementById('staff-cancel-edit').classList.remove('hidden');
@@ -999,7 +979,6 @@ window.addEventListener('pagehide', saveStaffState);
         document.getElementById('staff-reg-role').value = 'EMPLOYEE';
         document.getElementById('staff-reg-code').readOnly = false;
         document.getElementById('staff-form-title').textContent = '担当者を登録';
-        document.getElementById('staff-password-help').textContent = '新規登録時は必須です';
         document.getElementById('staff-save-btn').innerHTML = '<i class="fa-solid fa-user-plus"></i> 登録する';
         document.getElementById('staff-save-btn').classList.add('single');
         document.getElementById('staff-cancel-edit').classList.add('hidden');
@@ -1075,38 +1054,7 @@ window.addEventListener('pagehide', saveStaffState);
     }
 
     // ---- 初期化 ----
-    // 認証APIが返したユーザー名を担当者として使う。非表示のタイルだけを権限制御の根拠にはしない。
-    async function initializeAuthenticatedUser() {
-        try {
-            authenticatedUser = await window.oracleApi.getCurrentUser();
-            setActiveStaffCode(authenticatedUser.username);
-            const administrator = authenticatedUser.role === 'SYSTEM_ADMIN';
-            document.getElementById('staff-management-tile')?.classList.toggle('hidden', !administrator);
-            if (document.getElementById('order-tile-label')) document.getElementById('order-tile-label').textContent = administrator ? '注文修正' : '注文';
-            if (document.getElementById('order-page-title')) document.getElementById('order-page-title').textContent = administrator ? '注文修正' : '注文';
-        } catch (error) {
-            console.error('ログイン情報を確認できませんでした', error);
-            showToast('ログイン情報を確認できませんでした');
-        }
-    }
-
-    // HTTP Basicの再認証を促すサーバー処理を呼んでから端末内の担当者情報を消し、ログアウト画面へ移動する。
-    async function logoutAdmin() {
-        const button = document.querySelector('.logout-btn');
-        if (button) button.disabled = true;
-        try {
-            await fetch(window.orderAppPath('/api/auth/logout'), { method: 'POST', cache: 'no-store' });
-        } catch (error) {
-            console.debug('認証情報の破棄処理', error);
-        } finally {
-            localStorage.removeItem('staffCode');
-            localStorage.removeItem('lastStaffCode');
-            window.location.replace(window.orderAppPath('/staff/logout'));
-        }
-    }
-
     async function initializePage() {
-        await initializeAuthenticatedUser();
         try { await loadMenuFromOracle(); renderCategoryTabs(); renderMenuGrid(); }
         catch (error) { console.error(error); showToast('メニューの取得に失敗しました'); }
         document.getElementById('loading-overlay').style.display = 'none';
@@ -1151,6 +1099,5 @@ window.addEventListener('pagehide', saveStaffState);
     window.editStaff = editStaff;
     window.resetStaffForm = resetStaffForm;
     window.removeStaff = removeStaff;
-    window.logoutAdmin = logoutAdmin;
     window.renderAllergyList = renderAllergyList;
     window.masterRefresh = masterRefresh;

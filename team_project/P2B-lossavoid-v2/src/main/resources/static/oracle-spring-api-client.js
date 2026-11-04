@@ -32,9 +32,6 @@ async function springApi(path, options = {}) {
 // 画面側には業務ごとの操作だけを公開し、HTTPメソッド・URLの組立て・JSON化をここへ集約する。
 window.oracleApi = {
     kitchenStreamUrl: `${SPRING_API_BASE_URL}/kitchen/stream`,
-    getCurrentUser() {
-        return springApi("/auth/me");
-    },
     getMenus() {
         return springApi("/menus");
     },

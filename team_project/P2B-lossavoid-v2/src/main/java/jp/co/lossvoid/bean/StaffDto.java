@@ -1,7 +1,7 @@
 package jp.co.lossvoid.bean;
 
 /**
- * 管理画面へ返す従業員情報。認証用のパスワードハッシュは含めない。
+ * 担当者管理画面へ返すコード・氏名・区分・有効状態。DBの旧互換列は含めない。
  */
 public record StaffDto(
     String code,

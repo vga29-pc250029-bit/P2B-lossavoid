@@ -7,7 +7,7 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * APIへの別オリジンアクセスを設定値で許可する。認証・認可はSecurityConfigが別に担当する。
+ * APIへの別オリジンアクセスを設定値で許可する。店舗内LAN・指定端末の制限はネットワーク側で行う。
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {

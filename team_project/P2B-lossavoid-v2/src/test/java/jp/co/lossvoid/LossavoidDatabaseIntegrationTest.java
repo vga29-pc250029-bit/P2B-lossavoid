@@ -15,7 +15,6 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.test.context.transaction.BeforeTransaction;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +31,6 @@ class LossavoidDatabaseIntegrationTest {
     @Autowired OrderRepository orders;
     @Autowired StaffRepository staff;
     @Autowired StaffService staffService;
-    @Autowired PasswordEncoder encoder;
     private final Map<String, Integer> originalCounts = new LinkedHashMap<>();
 
     @BeforeTransaction
@@ -74,18 +72,18 @@ class LossavoidDatabaseIntegrationTest {
     }
 
     @Test
-    void createsAuthenticatesUpdatesAndDeletesNativeStaff() {
-        StaffDto created = staffService.createStaff(new StaffRequest("DB_TEST", "DB Test", "test-password", "EMPLOYEE", true));
-        var account = staff.findAccount("db_test").orElseThrow();
-        assertEquals(created.code(), account.code());
-        assertTrue(encoder.matches("test-password", account.passwordHash()));
-        staffService.updateStaff("DB_TEST", new StaffRequest("DB_TEST", "Changed", "", "SYSTEM_ADMIN", false));
-        var updated = staff.findAccount("DB_TEST").orElseThrow();
+    void createsUpdatesAndDeletesNativeStaffWithoutPasswords() {
+        StaffDto created = staffService.createStaff(new StaffRequest("DB_TEST", "DB Test", "EMPLOYEE", true));
+        assertEquals("DB_TEST", created.code());
+        String legacyMarker = jdbc.queryForObject("SELECT PASSWORD_HASH FROM STAFFS WHERE STAFF_CODE='DB_TEST'", String.class);
+        assertEquals("!NO_LOGIN!", legacyMarker);
+        staffService.updateStaff("DB_TEST", new StaffRequest("DB_TEST", "Changed", "SYSTEM_ADMIN", false));
+        var updated = staff.findAll().stream().filter(item -> item.code().equals("DB_TEST")).findFirst().orElseThrow();
         assertEquals("SYSTEM_ADMIN", updated.role());
         assertFalse(updated.enabled());
-        assertTrue(encoder.matches("test-password", updated.passwordHash()));
+        assertEquals(legacyMarker, jdbc.queryForObject("SELECT PASSWORD_HASH FROM STAFFS WHERE STAFF_CODE='DB_TEST'", String.class));
         staffService.deleteStaff("DB_TEST");
-        assertTrue(staff.findAccount("DB_TEST").isEmpty());
+        assertTrue(staff.findAll().stream().noneMatch(item -> item.code().equals("DB_TEST")));
     }
 
     @Test

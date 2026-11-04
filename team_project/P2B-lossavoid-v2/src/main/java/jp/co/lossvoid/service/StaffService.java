@@ -9,21 +9,17 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
 
 /**
- * 従業員入力の正規化とパスワードのハッシュ化を行う。重複コードや更新対象なしをHTTPエラーへ変換する。
+ * 担当者入力を正規化し、重複コードや更新対象なしをHTTPエラーへ変換する。ログイン認証は行わない。
  */
 @org.springframework.stereotype.Service
 public class StaffService {
     private final StaffRepository staffRepository;
-    private final PasswordEncoder passwordEncoder;
-
-    public StaffService(StaffRepository staffRepository, PasswordEncoder passwordEncoder) {
+    public StaffService(StaffRepository staffRepository) {
         this.staffRepository = staffRepository;
-        this.passwordEncoder = passwordEncoder;
     }
 
     public List<StaffDto> getStaff() {
@@ -31,36 +27,26 @@ public class StaffService {
     }
 
 
-    // 新規登録のパスワードは必須。平文をリポジトリへ渡さず、設定されたエンコーダーでハッシュ化する。
     public StaffDto createStaff(@Valid StaffRequest request) {
-        if (request.password() == null || request.password().length() < 4) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "パスワードは4文字以上で入力してください");
-        }
         StaffDto staff = normalize(request);
         try {
-            staffRepository.create(staff, passwordEncoder.encode(request.password()));
+            staffRepository.create(staff);
             return staff;
         } catch (DuplicateKeyException error) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "同じ従業員コードが登録されています", error);
         }
     }
 
-    // 更新時の空パスワードは変更なし。更新対象のコードはURLを正規化した値で固定する。
+    // 更新対象のコードはURLを正規化した値で固定する。
     public StaffDto updateStaff(String code, @Valid StaffRequest request) {
         String normalizedCode = normalizeCode(code);
-        if (request.password() != null && !request.password().isBlank() && request.password().length() < 4) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "パスワードは4文字以上で入力してください");
-        }
         StaffDto staff = new StaffDto(
             normalizedCode,
             request.name().trim(),
             normalizeRole(request.role()),
             request.enabled() == null || request.enabled()
         );
-        String passwordHash = request.password() == null || request.password().isBlank()
-            ? null
-            : passwordEncoder.encode(request.password());
-        if (staffRepository.update(normalizedCode, staff, passwordHash) == 0) {
+        if (staffRepository.update(normalizedCode, staff) == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "従業員が見つかりません");
         }
         return staff;

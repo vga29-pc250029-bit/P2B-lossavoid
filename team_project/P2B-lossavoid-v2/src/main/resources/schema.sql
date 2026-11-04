@@ -68,7 +68,7 @@ CREATE TABLE STORES (
     ENABLED NUMBER(1) NOT NULL
 );
 
--- 認証情報は平文ではなくハッシュで保存する。従業員コードの大文字小文字の重複は下の索引で防ぐ。
+-- PASSWORD_HASHは旧DB互換用の列。現行版は認証に使わず、担当者コードの重複を下の索引で防ぐ。
 CREATE TABLE STAFFS (
     STAFF_ID NUMBER(10) PRIMARY KEY,
     STORE_ID NUMBER(10) NOT NULL,

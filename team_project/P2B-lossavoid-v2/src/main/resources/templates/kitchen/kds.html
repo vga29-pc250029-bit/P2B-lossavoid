@@ -7,39 +7,32 @@
     <script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <script src="https://cdn.tailwindcss.com"></script>
     <title>キッチンディスプレイ</title>
     <link href="/css/kitchen.css" rel="stylesheet" th:href="@{/css/kitchen.css}"/>
-    <link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/>
 </head>
-<body class="h-screen flex flex-col overflow-hidden" data-page="kitchen">
-<header class="header-bg kds-header border-b border-black">
+<body class="kds-page" data-page="kitchen">
+<header class="header-bg kds-header">
     <div class="header-actions">
-        <button class="btn-yellow" id="completed-btn">提供済</button>
+        <!-- 元画面の未実装ボタンは、処理があるように見せず無効状態で残す。 -->
+        <button class="btn-yellow" id="news-btn" type="button" disabled title="速報機能は未実装です">速報</button>
+        <button class="btn-yellow" id="completed-btn" type="button">提供済</button>
+        <button class="btn-yellow" id="shift-btn" type="button" disabled title="シフト確認機能は未実装です">シフト確認</button>
     </div>
     <div class="header-status">
         <div class="pickup-alert hidden" id="pickup-alert" aria-live="assertive"></div>
         <div class="kds-message hidden" id="kds-message" aria-live="polite"></div>
     </div>
     <div class="header-actions right">
-        <button class="btn-yellow" id="delete-btn">整理結果を消す</button>
-        <button class="btn-yellow primary" id="organize-btn">整理</button>
+        <button class="btn-yellow" id="delete-btn" type="button" title="整理結果だけを消去します。注文データは削除しません">全消去</button>
+        <button class="btn-yellow primary" id="organize-btn" type="button">整理</button>
         <span class="current-time" id="current-time">hh:mm:ss</span>
     </div>
 </header>
-<nav class="v2-links">
-    <a href="/kitchen" th:href="@{/kitchen}">KDS</a>
-    <a href="/kitchen/served" th:href="@{/kitchen/served}">提供済み</a>
-    <a href="/kitchen/tables" th:href="@{/kitchen/tables}">卓状況</a>
-    <a href="/kitchen/simulator" th:href="@{/kitchen/simulator}">シミュレーター</a>
-</nav>
 <main class="kds-workspace">
-    <section class="raw-panel">
-        <h1 class="panel-title">受信伝票 <small>確認専用</small></h1>
+    <section class="raw-panel" aria-label="受信伝票">
         <div id="orderContainer"></div>
     </section>
-    <section class="right-panel">
-        <h1 class="panel-title">整理後ワークフロー <small>左＝フロア持出し／右＝キッチン完成</small></h1>
+    <section class="right-panel" aria-label="整理後の調理順と持出し待ち">
         <div id="organizedOrders"></div>
     </section>
 </main>

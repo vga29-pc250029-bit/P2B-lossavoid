@@ -1,11 +1,11 @@
 /* KDSの注文一覧・整理結果・完成待ち・提供履歴の表示を定義する。時刻に応じたクラスの切替はkitchen.jsが担当する。 */
 :root {
-    --ink: #18202b;
-    --line: #aeb8c5;
-    --paper: #f3f5f7;
-    --ticket: #dceeff;
-    --warm: #fff6d8;
-    --yellow: #ffd43b;
+    --ink: #000;
+    --line: #333;
+    --paper: #f0f0f0;
+    --ticket: #d1e9ff;
+    --warm: #fff9e6;
+    --yellow: #ffcc00;
     --red: #d92323;
     --green: #087f5b;
     --urgent: #c92a2a;
@@ -16,17 +16,28 @@
 body {
     margin: 0;
     color: var(--ink);
-    font-family: "Yu Gothic", "Meiryo", sans-serif;
+    font-family: "MS Gothic", "Yu Gothic", sans-serif;
     background: var(--paper);
 }
 
+.kds-page {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+button, select { font-family: inherit; }
 .hidden { display: none !important; }
 
 .header-bg { background: #ffedcc; }
 
 .kds-header {
-    min-height: 58px;
-    padding: 7px 10px;
+    flex-shrink: 0;
+    height: 61px;
+    padding: 5px;
+    border-bottom: 1px solid #000;
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
@@ -36,32 +47,36 @@ body {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
-.header-actions.right { justify-content: flex-end; }
-.header-status { min-width: 0; text-align: center; }
+.header-actions.right { justify-content: flex-end; gap: 20px; }
+.header-status { min-width: 0; max-height: 50px; overflow-y: auto; text-align: center; font-size: 13px; }
 
 .btn-yellow {
-    min-height: 42px;
-    padding: 7px 14px;
-    border: 2px solid #333;
-    border-radius: 6px;
+    min-height: 50px;
+    padding: 6px 20px;
+    border: 1px solid #333;
+    border-radius: 0;
     background: var(--yellow);
     color: #111;
-    font-size: 17px;
-    font-weight: 800;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
     cursor: pointer;
 }
 
-.btn-yellow.primary {
-    min-width: 104px;
-    background: #ffb703;
-    font-size: 21px;
-}
+.header-actions #news-btn { width: 94px; }
+.header-actions #completed-btn { width: 118px; }
+.header-actions #shift-btn { width: 170px; }
+.header-actions #delete-btn { width: 138px; }
+.header-actions #organize-btn { width: 114px; }
 
-.btn-yellow:hover { filter: brightness(.96); }
-.current-time { min-width: 94px; font: 700 22px/1 monospace; }
+.btn-yellow:not(:disabled):hover { filter: brightness(.96); }
+.btn-yellow:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+.btn-yellow:disabled { opacity: 1; cursor: not-allowed; }
+.current-time { width: 138px; flex-shrink: 0; font: 700 28px/1 monospace; }
 
 .pickup-alert {
     display: inline-block;
@@ -100,43 +115,27 @@ body {
 .kds-workspace {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     display: grid;
-    grid-template-columns: minmax(330px, 42%) minmax(480px, 58%);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
 }
 
 .raw-panel,
 .right-panel {
     min-height: 0;
-    padding: 8px;
+    min-width: 0;
+    padding: 4px;
     overflow-y: auto;
 }
 
-.raw-panel { border-right: 2px solid #333; }
-.right-panel { background: var(--warm); }
-
-.panel-title {
-    position: sticky;
-    top: -8px;
-    z-index: 2;
-    margin: -8px -8px 8px;
-    padding: 8px 10px;
-    border-bottom: 1px solid #7b8794;
-    background: #fff;
-    font-size: 18px;
-    font-weight: 900;
-}
-
-.panel-title small {
-    margin-left: 6px;
-    color: #53606d;
-    font-size: 12px;
-    font-weight: 700;
-}
+.right-panel { background: var(--warm); border-left: 2px dashed #333; }
 
 .order-card {
-    margin-bottom: 7px;
-    border: 2px solid #4c5b6a;
-    border-radius: 6px;
+    margin-bottom: 4px;
+    padding: 12px;
+    border: 1px solid #333;
+    border-radius: 0;
     background: var(--ticket);
 }
 
@@ -149,11 +148,11 @@ body {
     border-bottom: 1px solid #7ba4c7;
 }
 
-.table-number { color: #384655; font-size: 23px; font-weight: 900; }
+.table-number { color: #767676; font-size: 23px; font-weight: 900; }
 
 .raw-item-row {
     display: grid;
-    grid-template-columns: minmax(140px, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 6px;
     min-height: 38px;
@@ -162,7 +161,7 @@ body {
 }
 
 .raw-item-row:last-child { border-bottom: 0; }
-.raw-item-name { font-size: 17px; font-weight: 800; }
+.raw-item-name { min-width: 0; overflow-wrap: anywhere; font-size: 17px; font-weight: 800; }
 
 .recipe-chip,
 .raw-state {
@@ -190,24 +189,34 @@ body {
 
 .workflow-row {
     display: grid;
-    grid-template-columns: 118px minmax(210px, 1fr) 112px;
+    grid-template-columns: 100px minmax(0, 1fr) 100px;
     align-items: stretch;
     gap: 8px;
     margin-bottom: 7px;
     padding: 8px;
-    border: 2px solid #697480;
-    border-radius: 8px;
+    border: 1px solid #697480;
+    border-radius: 0;
     background: white;
-    box-shadow: 0 2px 0 rgb(0 0 0 / 12%);
 }
 
 .ticket-enter { animation: ticket-in .24s ease-out both; }
 .workflow-enter { animation: workflow-in .22s ease-out both; }
 
-.workflow-main { min-width: 0; }
+.workflow-main { min-width: 0; overflow-wrap: anywhere; }
 .workflow-title { font-size: 18px; font-weight: 900; }
 .workflow-meta { margin-top: 3px; color: #354351; font-size: 13px; }
 .workflow-instruction { margin-top: 3px; color: #7c2d12; font-size: 12px; font-weight: 800; }
+
+.workflow-steps { min-width: 0; margin-top: 5px; font-size: 13px; line-height: 1.6; }
+.raw-item-row > .workflow-steps { grid-column: 1 / -1; margin-top: 0; }
+.workflow-steps summary { cursor: pointer; font-weight: 700; }
+.workflow-steps summary span { margin-left: 6px; color: #53606d; font-size: 12px; }
+.workflow-steps summary:focus-visible { outline: 2px solid #333; outline-offset: 2px; }
+.workflow-steps ol { margin: 4px 0; padding-left: 22px; }
+.workflow-steps li { padding: 3px 0; overflow-wrap: anywhere; }
+.step-phase { margin-right: 6px; font-weight: 700; white-space: nowrap; }
+.step-duration { margin-left: 6px; color: #7c2d12; white-space: nowrap; }
+.workflow-time-note { color: #6c757d; font-size: 12px; }
 
 .workflow-feeds {
     display: flex;
@@ -240,6 +249,7 @@ body {
 
 .floor-pickup-button,
 .kitchen-ready-button {
+    align-self: start;
     min-height: 56px;
     padding: 8px;
     border: 2px solid #26313c;
@@ -277,6 +287,18 @@ body {
 .empty-panel.strong { font-size: 17px; line-height: 1.7; }
 .error-panel { border-color: #c92a2a; color: #7f1d1d; background: #ffe3e3; }
 
+/* ポップアップの配置も共通CSSで持ち、外部CSSの読込に依存させない。 */
+#served-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    background: rgb(0 0 0 / 50%);
+}
+
 .served-dialog {
     width: min(98vw, 1500px);
     max-height: 94vh;
@@ -291,6 +313,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px solid #000;
 }
 
 .served-dialog-header h2 { margin: 0; font-size: 22px; font-weight: 900; }
@@ -316,6 +339,7 @@ body {
 .served-table td { padding: 7px 6px; border: 1px solid #ced4da; text-align: center; white-space: nowrap; }
 .served-table .served-name { min-width: 190px; text-align: left; white-space: normal; }
 .served-table .money { text-align: right; }
+.served-table td[colspan] { padding: 24px; color: #6c757d; }
 .metric-late { color: #c92a2a; font-weight: 900; }
 .metric-early { color: #1864ab; font-weight: 900; }
 .metric-on-time { color: #087f5b; font-weight: 900; }
@@ -346,13 +370,22 @@ body {
 }
 
 @media (max-width: 900px) {
-    body { overflow: auto !important; }
-    .kds-header { grid-template-columns: 1fr; }
+    .kds-header { height: auto; grid-template-columns: 1fr; gap: 6px; }
     .header-actions,
-    .header-actions.right { justify-content: center; flex-wrap: wrap; }
-    .kds-workspace { display: block; overflow: visible; }
+    .header-actions.right { display: grid; gap: 8px; grid-template-columns: .75fr 1fr 1.45fr; }
+    .header-actions.right { grid-row: 2; grid-template-columns: 1fr 1fr auto; }
+    .header-status { grid-row: 3; }
+    .header-status:not(:has(> :not(.hidden))) { display: none; }
+    .header-actions .btn-yellow { width: 100% !important; min-width: 0; min-height: 42px; padding: 6px 8px; font-size: 18px; }
+    .kds-workspace { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); }
     .raw-panel,
-    .right-panel { overflow: visible; border: 0; }
-    .workflow-row { grid-template-columns: 92px minmax(160px, 1fr) 92px; }
-    .current-time { text-align: center; }
+    .right-panel { border: 0; }
+    .right-panel { border-top: 2px dashed #333; }
+    .workflow-row { grid-template-columns: 76px minmax(0, 1fr) 76px; }
+    .workflow-title { font-size: 16px; }
+    .floor-pickup-button,
+    .kitchen-ready-button { padding: 6px 4px; font-size: 14px; }
+    .current-time { width: 106px; font-size: 22px; text-align: center; }
+    .served-dialog-header h2 { font-size: 18px; }
+    .served-dialog-header .btn-yellow { min-height: 42px; padding: 6px 10px; font-size: 16px; }
 }

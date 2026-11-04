@@ -5,18 +5,15 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import jakarta.servlet.http.Cookie;
 import jp.co.lossvoid.bean.MenuDto;
 import jp.co.lossvoid.bean.OrderDto;
-import jp.co.lossvoid.config.BasicLogoutBarrierFilter;
-import jp.co.lossvoid.config.SecurityConfig;
+import jp.co.lossvoid.bean.StaffDto;
+import jp.co.lossvoid.form.StaffRequest;
 import jp.co.lossvoid.form.StatusUpdateRequest;
 import jp.co.lossvoid.repository.MenuRepository;
 import jp.co.lossvoid.repository.OrderRepository;
@@ -25,15 +22,13 @@ import jp.co.lossvoid.service.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * DB処理をモックに置き換え、画面・APIのルート、権限、コンテキストパスと主要操作を検証する。
+ * DB処理をモックに置き換え、LAN向け画面・API、認証機能の廃止、主要操作を検証する。
  */
 @WebMvcTest
-@Import(SecurityConfig.class)
 class MigrationRoutesTest {
     @Autowired MockMvc mvc;
     @MockitoBean MenuRepository menuRepository;
@@ -72,8 +67,7 @@ class MigrationRoutesTest {
     @Test
     void orderCartsSubmitWithoutAnExtraConfirmationPage() throws Exception {
         for (String path : List.of("/customer/cart", "/admin/orders/cart")) {
-            mvc.perform(get("/lossavoid" + path).contextPath("/lossavoid")
-                    .with(user("admin").roles("SYSTEM_ADMIN")))
+            mvc.perform(get("/lossavoid" + path).contextPath("/lossavoid"))
                 .andExpect(status().isOk())
                 .andExpect(xpath("//button[@id='submit-btn']/@onclick").string("submitOrder()"))
                 .andExpect(xpath("//button[@id='submit-btn']/@type").string("button"))
@@ -84,23 +78,29 @@ class MigrationRoutesTest {
     }
 
     @Test
-    void rendersAllAdministrativePagesForAnAdministrator() throws Exception {
+    void rendersAllAdministrativePagesWithoutLogin() throws Exception {
         for (String path : List.of("/admin", "/admin/orders/new", "/admin/orders/cart", "/admin/orders/confirm",
                 "/admin/orders", "/admin/orders/edit", "/admin/orders/cancel", "/admin/orders/merge",
                 "/admin/stock", "/admin/allergens", "/admin/staff", "/admin/staff/register",
-                "/admin/staff/update", "/admin/staff/confirm", "/staff/login")) {
-            mvc.perform(get(path).with(user("admin").roles("SYSTEM_ADMIN"))).andExpect(status().isOk());
+                "/admin/staff/update", "/admin/staff/confirm")) {
+            mvc.perform(get(path)).andExpect(status().isOk())
+                .andExpect(header().doesNotExist("WWW-Authenticate"));
         }
     }
 
     @Test
-    void preservesAdministratorAndEmployeeAccess() throws Exception {
-        mvc.perform(get("/admin")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/admin").with(user("T001").roles("EMPLOYEE"))).andExpect(status().isOk());
-        mvc.perform(get("/admin/staff").with(user("T001").roles("EMPLOYEE"))).andExpect(status().isForbidden());
-        mvc.perform(get("/api/staff").with(user("T001").roles("EMPLOYEE"))).andExpect(status().isForbidden());
-        mvc.perform(get("/api/auth/me").with(httpBasic("admin", "sanko3535")))
-            .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("SYSTEM_ADMIN"));
+    void providesLanStaffManagementWithoutAuthentication() throws Exception {
+        when(staffService.getStaff()).thenReturn(List.of());
+        mvc.perform(get("/admin")).andExpect(status().isOk())
+            .andExpect(xpath("//*[@id='staff-management-tile']").exists())
+            .andExpect(content().string(not(containsString("logoutAdmin"))));
+        mvc.perform(get("/api/staff")).andExpect(status().isOk()).andExpect(content().json("[]"));
+        StaffDto staff = new StaffDto("T001", "Member", "EMPLOYEE", true);
+        when(staffService.createStaff(any())).thenReturn(staff);
+        mvc.perform(post("/api/staff").contentType("application/json")
+                .content("{\"code\":\"T001\",\"name\":\"Member\",\"role\":\"EMPLOYEE\",\"enabled\":true}"))
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.code").value("T001"));
+        verify(staffService).createStaff(new StaffRequest("T001", "Member", "EMPLOYEE", true));
     }
 
     @Test
@@ -119,8 +119,7 @@ class MigrationRoutesTest {
             {"table":"01","guestCount":0,"orderMethod":"SELF",
              "items":[{"code":"2101","name":"Doria","price":300,"qty":1}]}
             """)).andExpect(status().isBadRequest());
-        mvc.perform(patch("/api/orders/1/items/2/cancel-one")).andExpect(status().isUnauthorized());
-        mvc.perform(patch("/api/orders/1/items/2/cancel-one").with(user("T001").roles("EMPLOYEE")))
+        mvc.perform(patch("/api/orders/1/items/2/cancel-one"))
             .andExpect(status().isOk());
         verify(orderService).cancelOneItem(1L, 2L);
     }
@@ -162,10 +161,10 @@ class MigrationRoutesTest {
             .andExpect(content().string(containsString("src=\"/lossavoid/js/app-path.js\"")))
             .andExpect(content().string(containsString("href=\"/lossavoid/css/customer.css\"")))
             .andExpect(content().string(not(containsString("<<<<<<<"))));
-        mvc.perform(get("/lossavoid/admin/staff/register").contextPath("/lossavoid")
-                .with(user("admin").roles("SYSTEM_ADMIN")))
+        mvc.perform(get("/lossavoid/admin/staff/register").contextPath("/lossavoid"))
             .andExpect(status().isOk())
-            .andExpect(content().string(containsString("id=\"staff-reg-password\"")))
+            .andExpect(xpath("//*[@id='staff-reg-code']").exists())
+            .andExpect(xpath("//input[@type='password']").doesNotExist())
             .andExpect(content().string(not(containsString("<<<<<<<"))));
     }
 
@@ -180,22 +179,17 @@ class MigrationRoutesTest {
     }
 
     @Test
-    void logoutForcesAChallengeWithinTheContextPath() throws Exception {
-        mvc.perform(post("/lossavoid/api/auth/logout").contextPath("/lossavoid"))
-            .andExpect(status().isNoContent())
-            .andExpect(header().string("Set-Cookie", containsString("Path=/lossavoid;")));
-        mvc.perform(get("/lossavoid/admin").contextPath("/lossavoid").servletPath("/admin")
-                .with(user("admin").roles("SYSTEM_ADMIN"))
-                .cookie(new Cookie(BasicLogoutBarrierFilter.COOKIE_NAME, "1")))
-            .andExpect(status().isUnauthorized())
-            .andExpect(header().string("WWW-Authenticate", containsString("Order Admin Login")))
-            .andExpect(cookie().path(BasicLogoutBarrierFilter.COOKIE_NAME, "/lossavoid"))
-            .andExpect(cookie().maxAge(BasicLogoutBarrierFilter.COOKIE_NAME, 0));
+    void removesLoginLogoutAndAuthenticationApiRoutes() throws Exception {
+        for (String path : List.of("/staff/login", "/staff/logout", "/logout.html", "/api/auth/me")) {
+            mvc.perform(get("/lossavoid" + path).contextPath("/lossavoid"))
+                .andExpect(status().isNotFound()).andExpect(header().doesNotExist("WWW-Authenticate"));
+        }
+        mvc.perform(post("/api/auth/logout")).andExpect(status().isNotFound());
     }
 
     @Test
     void preservesTheRegistrationConfirmationRoute() throws Exception {
-        mvc.perform(post("/admin/staff/register").with(user("admin").roles("SYSTEM_ADMIN")))
+        mvc.perform(post("/admin/staff/register"))
             .andExpect(status().isOk()).andExpect(view().name("customer/staff-confirm"));
     }
 }

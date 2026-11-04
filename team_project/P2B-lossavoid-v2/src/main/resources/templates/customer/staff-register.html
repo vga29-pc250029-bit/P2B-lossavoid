@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 従業員コード・氏名・パスワード・権限・有効状態の登録画面。保存後の一覧更新はadmin.jsが行う。 -->
+<!-- 従業員コード・氏名・担当区分・有効状態の登録画面。保存後の一覧更新はadmin.jsが行う。 -->
 
 
 <html lang="ja" xmlns:th="http://www.thymeleaf.org"><head><meta content="/" name="app-root" th:content="@{/}"/><script src="/js/app-path.js" th:src="@{/js/app-path.js}"></script><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><title>担当者登録</title><link href="/css/admin.css" rel="stylesheet" th:href="@{/css/admin.css}"/><link href="/css/v2-pages.css" rel="stylesheet" th:href="@{/css/v2-pages.css}"/></head><body class="flex flex-col" data-page="view-staff" data-staff-mode="register"><div class="page" id="view-staff">
@@ -25,19 +25,14 @@
 <input autocomplete="off" class="sub-input" id="staff-reg-name" maxlength="80" placeholder="例: 山田 太郎" required="" type="text"/>
 </label>
 <label>
-<span class="sub-label">パスワード</span>
-<input autocomplete="new-password" class="sub-input" id="staff-reg-password" maxlength="100" placeholder="4文字以上" type="password"/>
-<small id="staff-password-help" style="color:#64748b;">新規登録時は必須です</small>
-</label>
-<label>
-<span class="sub-label">権限</span>
+<span class="sub-label">担当区分</span>
 <select class="sub-input" id="staff-reg-role" required="">
 <option value="EMPLOYEE">従業員</option>
 <option value="SYSTEM_ADMIN">システム管理者</option>
 </select>
 </label>
 <label class="staff-status-toggle">
-<span><b>有効なアカウント</b><br/><small style="color:#64748b;">無効にするとログインできません</small></span>
+<span><b>有効な担当者</b></span>
 <input checked="" id="staff-reg-enabled" type="checkbox"/>
 </label>
 </div>

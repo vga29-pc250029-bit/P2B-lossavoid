@@ -26,8 +26,9 @@ Oracle接続は `localhost:1521/XEPDB1` の `lossavoid` ユーザーを使用す
 既存のlossavoidスキーマには、起動時に `db/lossavoid-upgrade.sql` で不足する構造だけを追加する。
 メニュー・従業員・注文等の初期データは投入しない。旧SQLは `migration-reference/order-app-*.sql.txt` に分離した。
 
-管理者の初期認証は通常版の設定を引き継ぐ。
-HTTP Basic認証、担当者のBCryptパスワード、有効状態、管理者/従業員の権限を移植している。
+2026-10-30に詳細設計書の本文に合わせ、ログイン認証・ログアウト・権限によるアクセス制御を廃止した。
+店舗内LAN・指定端末での利用が前提。URLの分離だけでは利用者を識別できないため、管理画面やAPIをインターネットへ公開しない。
+担当者の登録・更新・削除、区分・有効状態は残す。区分は管理情報であり、アクセス制御には使用しない。
 
 ## 画面とControllerの対応
 
@@ -58,8 +59,6 @@ v2に先に用意されていたテンプレートのフォルダ名を保持し
 | `/admin/staff/register` 担当者登録 | StaffRegistrationController | customer/staff-register.html |
 | `/admin/staff/update?code=...` 担当者変更 | StaffUpdateController | customer/staff-update.html |
 | `/admin/staff/confirm` メンバー確認 | StaffOrderController | customer/staff-confirm.html |
-| `/staff/login` 認証 | LoginController | staff/login.html |
-| `/staff/logout` ログアウト | LogoutController | staff/logout.html |
 | `/kitchen` KDS | OrderListController | kitchen/kds.html |
 | `/kitchen/cooking` 調理順 | CookingOrderController | kitchen/kds.html |
 | `/kitchen/priority` 優先順位 | CookingPriorityController | kitchen/kds.html |
@@ -69,18 +68,19 @@ v2に先に用意されていたテンプレートのフォルダ名を保持し
 | `/kitchen/orders/{orderId}` 注文詳細 | OrderDetailController | kitchen/order-detail.html |
 | `/kitchen/simulator` 調理順シミュレーター | CookingPriorityController | kitchen/simulator.html |
 
-`index.html`、`admin.html`、`Order.html`、`kitchen.html`、`logout.html`、`scheduler-simulator.html` の旧URLもControllerで受け付ける。
+`index.html`、`admin.html`、`Order.html`、`kitchen.html`、`scheduler-simulator.html` の旧URLもControllerで受け付ける。
+旧ログイン・ログアウト画面と `/api/auth/*` は廃止し、404を返す。
 
 ## Javaの移植先
 
 | 通常版 | v2 |
 | --- | --- |
-| dtoの表示用record | bean/MenuDto、OrderDto、OrderItemDto、StaffDto、StaffAccount |
+| dtoの表示用record | bean/MenuDto、OrderDto、OrderItemDto、StaffDto |
 | dtoの入力用record | form/OrderRequest、OrderItemRequest、MergeRequest、StaffRequest、StatusUpdateRequest、TableChangeRequest |
 | MenuRepository、OrderRepository、StaffRepository | repository配下へSQLを移植 |
 | OrderService | service/OrderService |
 | StaffControllerの登録・更新・削除処理 | service/StaffServiceとadmin側Controllerへ分割 |
-| SecurityConfig、WebConfig、BasicLogoutBarrierFilter | config配下 |
+| WebConfig | config/WebConfig（認証用設定・フィルターは2026-10-30に削除） |
 | KitchenEventController、KitchenUpdateBroadcaster | controller/kitchenとservice配下 |
 | AllergyController、AllergyService | controller/customerとservice配下 |
 
@@ -111,7 +111,7 @@ DB接続先変更後は、以下のlossavoidテーブルへSQLを対応させて
 node --test tests/kitchen-scheduler.test.cjs
 ```
 
-画面のルート、管理者・従業員の権限、注文入力検証、1個取消、商品1個単位登録のテストを実装。
+画面のルート、ログインなしでの業務操作、認証URLの廃止、注文入力検証、1個取消、商品1個単位登録のテストを実装。
 ブラウザではページ間の注文かご引き継ぎ・再読込、商品画像、担当者編集、KDS整理・提供済み表示を確認。
 送信・提供済み更新のブラウザ検証はテスト応答で実施し、実注文を書き込まない方式を使用した。
 
@@ -131,14 +131,23 @@ node --test tests/kitchen-scheduler.test.cjs
 | 注文ヘッダー | ORDERS / CUSTOMER_ID、ORDER_STATUS、ORDER_TIME |
 | 商品1個単位の明細 | ORDER_DETAILS / ORDER_DETAIL_ID、MENU_ID、QUANTITY、SERVED |
 | 調理状態 | COOKING_TASKS / ORDER_DETAIL_ID、STATUS、START_TIME、END_TIME |
-| 従業員・認証 | STAFFS / STAFF_ID、STAFF_CODE、PASSWORD_HASH、ROLE、ENABLED |
+| 担当者・旧互換列 | STAFFS / STAFF_ID、STAFF_CODE、PASSWORD_HASH、ROLE、ENABLED |
 | 店舗 | STORES / STORE_ID、STORE_NAME |
 
 - IDは既存の `SEQ_*` から採番し、NUMBER(10)へ格納。外部APIのメニューコードは互換性のため文字列のままとする。
-- 不足していたORDER_DETAILSを追加。MENUSの在庫・売切・調理担当、ORDERSの注文方式・更新日時、STAFFSのログインコードを補完。
+- 不足していたORDER_DETAILSを追加。MENUSの在庫・売切・調理担当、ORDERSの注文方式・更新日時、STAFFSの担当者コードを補完。
 - 初回の従業員登録時に `app.store-id`（標準1）の店舗が存在しなければ作成する。起動時には作成しない。
 - 新規構築直後は空。現在のローカルDBには、下記の一度限りのデータ移行を実施済み。
 - 実DBテストは `LOSSAVOID_DB_TEST=true` の場合のみ有効。テストデータはロールバックし、全7テーブルの件数が変わらないことを確認する。
+
+## 2026-10-30 認証機能の廃止
+
+- LoginController、LogoutController、SecurityConfig、BasicLogoutBarrierFilter、StaffAccountと認証画面を削除。
+- Spring Security依存、初期管理者ID・パスワード設定、認証API、ログアウトボタン、担当者パスワード入力を削除。
+- 担当者管理APIはパスワードなしで登録・更新する。既存のPASSWORD_HASHは更新せず保持する。
+- PASSWORD_HASHがNOT NULLの旧DBでも動くよう、新規担当者には認証に使用しない `!NO_LOGIN!` マーカーを保存する。
+- DBの表・列・既存データは削除しない。認証を再導入する場合、マーカーはパスワードハッシュではないため再設定が必要。
+- 依存関係と削除済みクラスの残存を避けるため、EclipseではMavenプロジェクトを更新し、`mvnw.cmd clean test` 後にSpringを再起動する。
 
 ## 2026-10-22 既存データの移行
 
