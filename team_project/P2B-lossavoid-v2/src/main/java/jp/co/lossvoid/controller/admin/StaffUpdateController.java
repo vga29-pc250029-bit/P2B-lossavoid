@@ -1,36 +1,52 @@
+
 package jp.co.lossvoid.controller.admin;
 
-import jp.co.lossvoid.bean.*;
-import jp.co.lossvoid.form.*;
-import jp.co.lossvoid.repository.*;
-import jp.co.lossvoid.service.*;
-import jakarta.validation.Valid;
-import java.util.List;
 import java.util.Map;
+
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import jakarta.validation.Valid;
+import jp.co.lossvoid.bean.StaffDto;
+import jp.co.lossvoid.form.StaffRequest;
+import jp.co.lossvoid.service.StaffService;
 
 /**
- * 担当者コードを指定した更新・削除APIと編集画面を提供する。店舗内LANでの利用を前提とする。
+ * スタッフの更新と削除を行う。
+ * スタッフの編集画面も表示する。
  */
 @Controller
 public class StaffUpdateController {
+
     private final StaffService staffService;
+
+    // StaffServiceを使えるようにする
     public StaffUpdateController(StaffService staffService) {
         this.staffService = staffService;
     }
 
+    // スタッフ更新画面を表示する
     @GetMapping("/admin/staff/update")
-    public String update() { return "customer/staff-update"; }
+    public String update() {
+        return "customer/staff-update"; 
+    }
 
+    // スタッフの情報を更新する
     @PutMapping("/api/staff/{code}")
     @ResponseBody
     public StaffDto updateStaff(@PathVariable String code, @Valid @RequestBody StaffRequest request) {
         return staffService.updateStaff(code, request);
     }
 
+    // スタッフを削除する
     @DeleteMapping("/api/staff/{code}")
     @ResponseBody
-    public Map<String, Boolean> deleteStaff(@PathVariable String code) { return staffService.deleteStaff(code); }
+    public Map<String, Boolean> deleteStaff(@PathVariable String code) {
+        return staffService.deleteStaff(code);
+    }
 }

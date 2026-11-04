@@ -1,10 +1,8 @@
+
 package jp.co.lossvoid.controller.admin;
 
-import jakarta.validation.Valid;
 import java.util.List;
-import jp.co.lossvoid.bean.StaffDto;
-import jp.co.lossvoid.form.StaffRequest;
-import jp.co.lossvoid.service.StaffService;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,32 +11,55 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
+import jakarta.validation.Valid;
+import jp.co.lossvoid.bean.StaffDto;
+import jp.co.lossvoid.form.StaffRequest;
+import jp.co.lossvoid.service.StaffService;
+
 /**
- * 担当者一覧・登録画面と従業員の取得・登録APIを提供する。入力検証後の登録処理はStaffServiceへ渡す。
+ * スタッフの一覧と登録画面を表示する。
+ * スタッフの取得と登録も行う。
  */
 @Controller
 public class StaffRegistrationController {
+
     private final StaffService staffService;
+
+    // StaffServiceを使えるようにする
     public StaffRegistrationController(StaffService staffService) {
         this.staffService = staffService;
     }
 
+    // スタッフ一覧画面を表示する
     @GetMapping("/admin/staff")
-    public String list() { return "customer/staff-list"; }
+    public String list() {
+        return "customer/staff-list";
+    }
 
+    // スタッフ登録画面を表示する
     @GetMapping("/admin/staff/register")
-    public String register() { return "customer/staff-register"; }
+    public String register() {
+        return "customer/staff-register";
+    }
 
-    // この画面ルートは確認用テンプレートを返すだけ。実際の登録は下のJSON APIが担当する。
+    // スタッフ登録の確認画面を表示する
     @PostMapping("/admin/staff/register")
-    public String registerStaff() { return "customer/staff-confirm"; }
+    public String registerStaff() {
+        return "customer/staff-confirm";
+    }
 
+    // スタッフの一覧を取得する
     @GetMapping("/api/staff")
     @ResponseBody
-    public List<StaffDto> listStaff() { return staffService.getStaff(); }
+    public List<StaffDto> listStaff() {
+        return staffService.getStaff();
+    }
 
+    // 新しいスタッフを登録する
     @PostMapping("/api/staff")
     @ResponseBody
     @ResponseStatus(HttpStatus.CREATED)
-    public StaffDto create(@Valid @RequestBody StaffRequest request) { return staffService.createStaff(request); }
+    public StaffDto create(@Valid @RequestBody StaffRequest request) {
+        return staffService.createStaff(request);
+    }
 }
