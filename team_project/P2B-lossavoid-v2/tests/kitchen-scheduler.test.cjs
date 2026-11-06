@@ -47,7 +47,7 @@ test('uses a 43-second continuous-feed pitch on the lower conveyor', () => {
     assert.deepEqual(result.items.map(value => value.scheduleStartSeconds), [0, 0, 43]);
 });
 
-test('starts long cooking first and closes 70% of the finish gap within one ticket', () => {
+test('starts long cooking first and overlaps the one-minute pasta work within one ticket', () => {
     const input = [
         item({ itemId: 'lower', code: '2101', name: 'ミラノ風ドリア', cookTime: 6, menuCategory: 'doria' }),
         item({ itemId: 'upper', code: '1305', name: '田舎風ミネストローネ' }),
@@ -57,11 +57,11 @@ test('starts long cooking first and closes 70% of the finish gap within one tick
     const byId = new Map(result.items.map(value => [value.itemId, value]));
     assert.equal(byId.get('lower').scheduleStartSeconds, 0);
     assert.equal(byId.get('upper').scheduleStartSeconds, 105);
-    assert.equal(byId.get('pasta').scheduleStartSeconds, 105);
+    assert.equal(byId.get('pasta').scheduleStartSeconds, 189);
     assert.equal(byId.get('lower').scheduleFinishSeconds, 330);
     assert.equal(byId.get('upper').scheduleFinishSeconds, 285);
-    assert.equal(byId.get('pasta').scheduleFinishSeconds, 285);
-    assert.equal(result.syncSpreadSeconds, 45);
+    assert.equal(byId.get('pasta').scheduleFinishSeconds, 249);
+    assert.equal(result.syncSpreadSeconds, 81);
     assert.equal(result.exact, true);
     assert.equal(result.assumptions.syncAlignment, 0.7);
 });
@@ -85,23 +85,23 @@ test('starts both dorias before the salad and keeps distinct tickets at one tabl
 
 test('classifies long hot mains before salad, 14xx appetizers, pizza and pasta', () => {
     assert.equal(workPriority(item({ code: '2110', menuCategory: 'doria', cookTime: 6 })), 0);
-    assert.equal(workPriority(item({ code: '2418', menuCategory: 'meat', cookTime: 6 })), 0);
+    assert.equal(workPriority(item({ code: '2418', menuCategory: 'meat', cookTime: 6 })), 0.5);
     assert.equal(workPriority(item({ code: '1209', menuCategory: 'appetizer', cookTime: 2 })), 1);
     assert.equal(workPriority(item({ code: '1402', menuCategory: 'appetizer', cookTime: 6 })), 2);
     assert.equal(workPriority(item({ code: '2206', menuCategory: 'pizza', cookTime: 3 })), 3);
     assert.equal(workPriority(item({ code: '2305', menuCategory: 'pasta', cookTime: 3 })), 3);
 });
 
-test('a doria takes the lower-oven priority over 14xx appetizer and grill over pizza', () => {
+test('a doria and mixed grill take the lower-oven priority before 14xx appetizers', () => {
     const result = scheduleKitchenItems([
         item({ orderId: 'A', itemId: 'arrosticini', code: '1402', cookTime: 6, menuCategory: 'appetizer' }),
         item({ orderId: 'B', itemId: 'pizza', code: '2206', cookTime: 3, menuCategory: 'pizza' }),
         item({ orderId: 'C', itemId: 'grill', code: '2418', cookTime: 6, menuCategory: 'meat' }),
         item({ orderId: 'D', itemId: 'doria', code: '2110', cookTime: 6, menuCategory: 'doria' })
     ], { nowMs: NOW });
-    const firstByResource = resource => result.items.find(value => value.recipe.resource === resource);
-    assert.equal(firstByResource('OVEN_LOWER').itemId, 'doria');
-    assert.equal(firstByResource('OVEN_UPPER').itemId, 'grill');
+    const lower = result.items.filter(value => value.recipe.resource === 'OVEN_LOWER');
+    assert.deepEqual(lower.slice(0, 2).map(value => value.itemId), ['doria', 'grill']);
+    assert.equal(result.items.find(value => value.recipe.resource === 'OVEN_UPPER').itemId, 'pizza');
 });
 
 test('a locked completion anchors only its own ticket, not another order at the same table', () => {
@@ -151,7 +151,7 @@ test('pairs lower-oven dishes from different tables when both lanes are free', (
     assert.deepEqual(new Set(result.items.map(value => value.table)), new Set(['01', '02']));
 });
 
-test('reserves both upper lanes for lamb meat and sides', () => {
+test('schedules lamb as a two-pass single-tray upper-oven dish', () => {
     const input = [
         item({ itemId: 'lamb', code: '2417', name: 'ラム（仔羊）のランプステーキ', menuCategory: 'meat', createdAtMs: NOW - 20 * 60000 }),
         item({ itemId: 'pizza-a', code: '2203', name: 'マルゲリータピザ', menuCategory: 'pizza' }),
@@ -160,16 +160,17 @@ test('reserves both upper lanes for lamb meat and sides', () => {
     const result = scheduleKitchenItems(input, { nowMs: NOW });
     const lamb = result.items.find(value => value.itemId === 'lamb');
     assert.equal(lamb.batchNumber, 1);
-    assert.equal(lamb.lane, '左右');
-    assert.ok(result.items.filter(value => value.itemId !== 'lamb').every(value => value.batchNumber > 1));
+    assert.equal(lamb.lane, '1');
+    assert.deepEqual(lamb.passStartSeconds, [0, 210]);
+    assert.equal(lamb.scheduleFinishSeconds, 390);
 });
 
 test('maps peak chicken finishing and two-pass hamburgers explicitly', () => {
     const chicken = resolveRecipe(item({ code: '2402', name: '若鶏のディアボラ風', menuCategory: 'meat' }));
     const hamburger = resolveRecipe(item({ code: '2406', name: 'ハンバーグステーキ', menuCategory: 'meat', cookTime: 6 }));
     assert.equal(chicken.durationSeconds, 180);
-    assert.match(chicken.instruction, /仕込み済み鶏/);
-    assert.equal(hamburger.durationSeconds, 360);
+    assert.match(chicken.instruction, /焼き置きチキン/);
+    assert.equal(hamburger.durationSeconds, 390);
     assert.equal(hamburger.passes, 2);
 });
 
@@ -192,7 +193,7 @@ test('reserves every two-pass oven feed without violating lane capacity or pitch
     const hamburger = result.items.find(value => value.itemId === 'hamburger');
 
     assert.equal(hamburger.passStartSeconds.length, 2);
-    assert.equal(hamburger.passStartSeconds[1] - hamburger.passStartSeconds[0], 180);
+    assert.equal(hamburger.passStartSeconds[1] - hamburger.passStartSeconds[0], 210);
     assert.deepEqual(hamburger.ovenFeedEvents.map(event => event.pass), [1, 2]);
 
     const usageByTime = new Map();
@@ -222,7 +223,7 @@ test('reserves physical feed events for every quantity while keeping one KDS row
     assert.equal(scheduled.lane, '複数');
 });
 
-test('keeps every quantity unit on its fixed second pass after three minutes', () => {
+test('keeps every quantity unit on its fixed second pass after the plating gap', () => {
     const result = scheduleKitchenItems([
         item({
             itemId: 'three-hamburgers', qty: 3, code: '2406',
@@ -235,12 +236,12 @@ test('keeps every quantity unit on its fixed second pass after three minutes', (
     for (const unit of [1, 2, 3]) {
         const feeds = events.filter(event => event.unit === unit);
         assert.deepEqual(feeds.map(event => event.pass), [1, 2]);
-        assert.equal(feeds[1].startSeconds - feeds[0].startSeconds, 180);
+    assert.equal(feeds[1].startSeconds - feeds[0].startSeconds, 210);
     }
-    assert.equal(result.items[0].scheduleFinishSeconds, 383);
+    assert.equal(result.items[0].scheduleFinishSeconds, 436);
 });
 
-test('packs quantity-two hamburgers into both lanes on both passes', () => {
+test('reserves two first-pass trays per hamburger, then one second-pass tray', () => {
     const result = scheduleKitchenItems([
         item({
             itemId: 'two-hamburgers', qty: 2, code: '2406',
@@ -248,11 +249,12 @@ test('packs quantity-two hamburgers into both lanes on both passes', () => {
         })
     ], { nowMs: NOW });
 
-    assert.deepEqual(result.items[0].passStartSeconds, [0, 0, 180, 180]);
-    assert.equal(result.items[0].scheduleFinishSeconds, 360);
+    assert.deepEqual(result.items[0].passStartSeconds, [0, 23, 210, 233]);
+    assert.deepEqual(result.items[0].ovenFeedEvents.map(event => event.trayUnits), [2, 2, 1, 1]);
+    assert.equal(result.items[0].scheduleFinishSeconds, 413);
 });
 
-test('uses consecutive full feed positions for two quantity-two lamb plates', () => {
+test('pairs two lamb plates in parallel, then reinserts both after plating', () => {
     const result = scheduleKitchenItems([
         item({
             itemId: 'two-lambs', qty: 2, code: '2417',
@@ -260,9 +262,9 @@ test('uses consecutive full feed positions for two quantity-two lamb plates', ()
         })
     ], { nowMs: NOW });
 
-    assert.deepEqual(result.items[0].passStartSeconds, [0, 23]);
-    assert.deepEqual(result.items[0].ovenFeedEvents.map(event => event.trayUnits), [2, 2]);
-    assert.equal(result.items[0].scheduleFinishSeconds, 203);
+    assert.deepEqual(result.items[0].passStartSeconds, [0, 0, 210, 210]);
+    assert.deepEqual(result.items[0].ovenFeedEvents.map(event => event.trayUnits), [1, 1, 1, 1]);
+    assert.equal(result.items[0].scheduleFinishSeconds, 390);
 });
 
 test('keeps a same-table upper dish aligned after a ten-dish lower backlog', () => {
@@ -424,10 +426,10 @@ test('rejects fixed reservations that exceed lanes or violate feed pitch', () =>
     }), /投入間隔/);
 });
 
-test('models pasta as a three-minute join with parallel one-minute sauce', () => {
+test('models pasta as one-minute noodle and sauce work in parallel', () => {
     const pasta = resolveRecipe(item({ code: '2303', name: 'ペペロンチーノ', menuCategory: 'pasta', station: 'heat' }));
     assert.equal(pasta.resource, 'PASTA');
-    assert.equal(pasta.durationSeconds, 180);
+    assert.equal(pasta.durationSeconds, 60);
     assert.match(pasta.instruction, /並行/);
 });
 

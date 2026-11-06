@@ -3,7 +3,7 @@ import "./kitchen-duplicates.js";
 
 const cookMap = {};
 let latestOrders = [];
-const PLAN_STORAGE_KEY = "lossavoid:kds:organized-plan:v3";
+const PLAN_STORAGE_KEY = "lossavoid:kds:organized-plan:v4";
 const DUPLICATE_ACK_KEY = "lossavoid:kds:duplicate-ack:v1";
 let organizedPlan = [];
 let possibleDuplicates = [];
@@ -163,6 +163,7 @@ function recipeStepsHtml(recipe, itemId, location) {
 }
 
 function isKitchenTarget(cookInfo) {
+    if (String(cookInfo?.code) === "3214") return true;
     if (!cookInfo || cookInfo.kitchenCategory === "FLOOR") return false;
     return ["kitchen", "heat", "Flor"].includes(cookInfo.section);
 }

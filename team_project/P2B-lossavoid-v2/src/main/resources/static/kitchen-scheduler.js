@@ -16,19 +16,59 @@
         largeBacklogThreshold: 30
     };
 
-    const LOWER_OVEN_CODES = new Set([
-        "1401", "1402", "1405", "1410", "1452",
-        "2101", "2103", "2108", "2110", "2115"
-    ]);
+    // 調理時間_タイムテーブル.xlsx の投入/取出し時刻。手作業は時間未計測。
+    const OVEN_TIMETABLE = {
+        "1305": { resource: "OVEN_UPPER", seconds: 180, prep: "土鍋にスープとグランモラビアチーズを入れる", finish: "オリーブオイル・パセリをかける" },
+        "1307": { resource: "OVEN_UPPER", seconds: 180, prep: "土鍋にスープ・スライスパン・グランモラビアチーズを入れる", finish: "オリーブオイル・パセリをかける" },
+        "1401": { resource: "OVEN_LOWER", seconds: 330, prep: "辛味チキン4個を鉄板にのせる" },
+        "1402": { resource: "OVEN_LOWER", seconds: 330, prep: "アロスティチーニ2本を鉄板にのせる", finish: "やみつきスパイスを添える" },
+        "1452": { resource: "OVEN_LOWER", seconds: 330, prep: "アロスティチーニ4本を鉄板にのせる", finish: "やみつきスパイスを添える" },
+        "1404": { resource: "OVEN_UPPER", seconds: 180, prep: "ポップコーンシュリンプ9個を鉄板にのせる", finish: "ドレッシングを添える" },
+        "1405": { resource: "OVEN_LOWER", seconds: 330, prep: "エスカルゴを用意する" },
+        "1407": { resource: "OVEN_UPPER", seconds: 180, prep: "ソーセージ5本とポテト2本を鉄板にのせる" },
+        "1410": { resource: "OVEN_LOWER", seconds: 330, prep: "ムール貝4個を鉄板にのせる" },
+        "1416": { resource: "OVEN_UPPER", seconds: 180, prep: "ポテト8本を鉄板にのせる" },
+        "2203": { resource: "OVEN_UPPER", seconds: 180, prep: "ピザ生地にチーズとモッツァレラをのせる" },
+        "2204": { resource: "OVEN_UPPER", seconds: 180, prep: "ピザ生地にチーズ・きのこ・野菜ペーストをのせる" },
+        "2206": { resource: "OVEN_UPPER", seconds: 180, prep: "ピザ生地にチーズ・コーン・グランモラビアチーズをのせる" },
+        "2208": { resource: "OVEN_UPPER", seconds: 180, prep: "ピザ生地にチーズとソーセージをのせる" },
+        "2402": { resource: "OVEN_UPPER", seconds: 180, prep: "焼き置きチキンにポテト・コーンを盛る", finish: "野菜ペースト・ガルムソースをかける" },
+        "2404": { resource: "OVEN_UPPER", seconds: 180, prep: "焼き置きチキンにピザソース・チーズ・ポテト・コーンを盛る", finish: "デミグラスソースをかける" },
+        "2403": { resource: "OVEN_UPPER", seconds: 390, passes: 2, prep: "ハンバーグを鉄板にのせる", between: "ピザソース・チーズ・ポテト・コーンをのせる", finish: "デミグラスソース・パセリをかける" },
+        "2406": { resource: "OVEN_UPPER", seconds: 390, passes: 2, passTrayUnits: [2, 1], prep: "ハンバーグと目玉焼き用の卵を別々の鉄板にのせる", between: "ポテト・コーンをのせ、卵を保温する", finish: "デミグラスソースと目玉焼きをのせる" },
+        "2407": { resource: "OVEN_UPPER", seconds: 390, passes: 2, passTrayUnits: [2, 1], prep: "ハンバーグと目玉焼き用の卵を別々の鉄板にのせる", between: "ポテト・コーンをのせ、卵を保温する", finish: "野菜ペースト・ガルムソース・目玉焼きをのせる" },
+        "2417": { resource: "OVEN_UPPER", seconds: 390, passes: 2, prep: "ラムの血を切り、鉄板にのせる", between: "ポテト・コーンをのせる", finish: "ラムを裏返し、やみつきココットを添える" },
+        "2418": { resource: "OVEN_LOWER", seconds: 330, prep: "ハンバーグ・ポテト・コーン・辛味チキン2個・シュリンプ5個を盛る", finish: "具材を鉄板から離し、デミグラスソースをかける" },
+        "3110": { resource: "OVEN_UPPER", seconds: 180, prep: "フォッカチオにオリーブオイルをかける" },
+        "3111": { resource: "OVEN_UPPER", seconds: 180, prep: "フォッカチオにオリーブオイルをかける", finish: "ガーリックソースをかける" },
+        "3112": { resource: "OVEN_UPPER", seconds: 180, prep: "フォッカチオにオリーブオイルをかける", finish: "シナモンをかける" },
+        "3114": { resource: "OVEN_UPPER", seconds: 180, prep: "フォッカチオを裏面でのせ、ピザチーズ・グランモラビアチーズをかける" },
+        "3214": { resource: "OVEN_UPPER", seconds: 180, prep: "シナモンフォッカチオを焼く", finish: "フロアでミルクジェラートとスプーンを添える" }
+    };
 
-    const UPPER_OVEN_CODES = new Set([
-        "1305", "1307", "1404", "1407", "1416",
-        "2203", "2204", "2206", "2208",
-        "3110", "3111", "3112", "3114"
-    ]);
-
-    const CHICKEN_FINISH_CODES = new Set(["2402", "2404"]);
-    const HAMBURGER_CODES = new Set(["2403", "2406", "2407"]);
+    const PASTA_SAUCE = {
+        "2303": "塩オイルソース・フライドガーリック・唐辛子を炒める",
+        "2317": "塩オイルソース・フライドガーリック・唐辛子を炒める",
+        "2304": "トマトソース・パンチェッタを炒める",
+        "2305": "カルボソースを温める",
+        "2318": "カルボソースを温める",
+        "2306": "ミートソースを温める",
+        "2316": "ミートソースを温める",
+        "2310": "塩オイルソース・ボンゴレ・フライドガーリックを温める",
+        "2321": "きのこソース・ほうれん草を温める",
+        "2325": "トマトソース・フライドガーリック・唐辛子を炒める",
+        "2328": "イカ墨ソース・カットしたイカを温める"
+    };
+    const TARAKO_PASTA_CODES = new Set(["2301", "2320"]);
+    const EGG_PASTA_CODES = new Set(["2316", "2317", "2318"]);
+    const COLD_PLATES = {
+        "1406": "小皿にわかめ・小エビ・ドレッシング・パプリカパウダーを盛る",
+        "1408": "小皿にわかめ・チキン・ドレッシング・パプリカパウダーを盛る",
+        "1413": "小皿に人参を盛り、オリーブオイル・パセリをかける",
+        "1417": "小皿にミニトマト2個・モッツァレラ4個を盛り、オリーブオイル・パセリをかける",
+        "1422": "ハモン・セラーヌを盛り、パセリをかける",
+        "1423": "ハモン・セラーヌとモッツァレラ2個を盛り、パセリをかける"
+    };
     const DORIA_CODES = new Set(["2101", "2103", "2108", "2110", "2115"]);
     const SALAD_TOPPINGS = new Map([["1202", "小エビ"], ["1205", "わかめ"], ["1209", "チキン"]]);
     const PHASE_LABELS = {
@@ -63,7 +103,7 @@
             phaseLabel: PHASE_LABELS[step.phase],
             kind: step.phase === "HEAT" ? "equipment" : (step.phase === "SERVE" ? "handoff" : "manual"),
             durationSeconds: step.durationSeconds ?? null,
-            dependsOn: index === 0 ? [] : [definitions[index - 1].id]
+            dependsOn: step.dependsOn ? [...step.dependsOn] : (index === 0 ? [] : [definitions[index - 1].id])
         }));
         return {
             ...recipe,
@@ -128,6 +168,80 @@
         }, steps);
     }
 
+    function timetableOvenRecipe(code) {
+        const entry = OVEN_TIMETABLE[code];
+        if (!entry) return null;
+        const lower = entry.resource === "OVEN_LOWER";
+        const ovenName = lower ? "下段" : "上段";
+        const passes = entry.passes || 1;
+        const heatSeconds = passes === 2 ? 180 : entry.seconds;
+        const steps = [
+            { id: "prepare", phase: "PREP", instruction: entry.prep },
+            { id: "oven-in-1", phase: "IN", instruction: `${ovenName}オーブンへ入れる` },
+            { id: "oven-heat-1", phase: "HEAT", instruction: `${ovenName}オーブンで加熱する`, durationSeconds: heatSeconds },
+            { id: "oven-out-1", phase: "OUT", instruction: "オーブンから取り出す" }
+        ];
+        if (passes === 2) {
+            steps.push(
+                { id: "between-passes", phase: "TOPPING", instruction: entry.between, durationSeconds: 30 },
+                { id: "oven-in-2", phase: "IN", instruction: `${ovenName}オーブンへ再投入する` },
+                { id: "oven-heat-2", phase: "HEAT", instruction: `${ovenName}オーブンで再加熱する`, durationSeconds: heatSeconds },
+                { id: "oven-out-2", phase: "OUT", instruction: "オーブンから取り出す" }
+            );
+        }
+        if (entry.finish) steps.push({ id: "finish", phase: "FINISH", instruction: entry.finish });
+        steps.push({ id: "serve", phase: "SERVE", instruction: "提供する" });
+        const timeLabel = passes === 2 ? "3:00×2＋中間0:30" : (lower ? "5:30" : "3:00");
+        return withSteps({
+            resource: entry.resource,
+            resourceLabel: `${ovenName}オーブン ${timeLabel}`,
+            durationSeconds: entry.seconds,
+            durationSource: passes === 2 ? "timetable-with-interpass" : "timetable-equipment",
+            trayUnits: entry.passTrayUnits?.[0] || 1,
+            passTrayUnits: entry.passTrayUnits ? [...entry.passTrayUnits] : undefined,
+            passOffsets: passes === 2 ? [0, 210] : undefined,
+            passes,
+            instruction: `${entry.prep} → ${ovenName}投入${passes === 2 ? " → 中間盛付 → 再投入" : ""}${entry.finish ? ` → ${entry.finish}` : ""}`
+        }, steps);
+    }
+
+    function timetablePastaRecipe(code) {
+        const sauce = PASTA_SAUCE[code];
+        if (!sauce && !TARAKO_PASTA_CODES.has(code)) return null;
+        const penne = code === "2325" || code === "2328";
+        const noodle = penne ? "ペンネ" : "スパゲッティ";
+        const steps = [
+            { id: "noodle-prep", phase: "PREP", instruction: `${noodle}をテボに入れる` },
+            { id: "noodle-in", phase: "IN", instruction: `${noodle}を茹で始める` },
+            { id: "noodle-heat", phase: "HEAT", instruction: `${noodle}を茹でる`, durationSeconds: 60 }
+        ];
+        if (sauce) {
+            steps.push({
+                id: "sauce-heat", phase: "HEAT", instruction: `${sauce}（麺と並行）`,
+                durationSeconds: 60, dependsOn: ["noodle-in"]
+            });
+        }
+        steps.push({
+            id: "noodle-out", phase: "OUT", instruction: `${noodle}をテボから出す`,
+            dependsOn: sauce ? ["noodle-heat", "sauce-heat"] : ["noodle-heat"]
+        });
+        const finish = TARAKO_PASTA_CODES.has(code) ?
+            (code === "2320" ? "タラコソース・小エビ・のりをのせる" : "タラコソース・のりをのせる") :
+            `ソースを麺と合わせる${EGG_PASTA_CODES.has(code) ? "。半熟卵をのせる" : ""}`;
+        steps.push(
+            { id: "finish", phase: "FINISH", instruction: finish },
+            { id: "serve", phase: "SERVE", instruction: "提供する" }
+        );
+        return withSteps({
+            resource: "PASTA",
+            resourceLabel: sauce ? "麺1:00＋ソース1:00（並行）" : "麺1:00＋盛付",
+            durationSeconds: 60,
+            durationSource: "timetable-equipment",
+            trayUnits: 1, passes: 1,
+            instruction: sauce ? "麺とソースを並行開始" : "麺を茹でてタラコソースを盛り付ける"
+        }, steps);
+    }
+
     // 商品ごとに設備・所要秒数・鉄板枚数・周回数を決める。未登録商品の推定や暫定工程は実測済みの値と区別する。
     function resolveRecipe(item) {
         const code = normalizeCode(item);
@@ -137,82 +251,68 @@
         const detailed = detailedRecipe(code, fallbackMinutes);
         if (detailed) return detailed;
 
-        if (LOWER_OVEN_CODES.has(code)) {
-            return {
-                resource: "OVEN_LOWER",
-                resourceLabel: "下段オーブン 5:30",
-                durationSeconds: 330,
-                trayUnits: 1,
-                passes: 1,
-                instruction: "下段へ投入"
-            };
+        const oven = timetableOvenRecipe(code);
+        if (oven) return oven;
+
+        const pasta = timetablePastaRecipe(code);
+        if (pasta) return pasta;
+
+        if (COLD_PLATES[code]) {
+            return withSteps({
+                resource: "COLD_PREP", resourceLabel: "冷製盛付",
+                durationSeconds: Math.round(fallbackMinutes * 60),
+                durationSource: "menu-master-estimate", provisional: true,
+                trayUnits: 1, passes: 1, instruction: COLD_PLATES[code]
+            }, [
+                { id: "plate", phase: "TOPPING", instruction: COLD_PLATES[code] },
+                { id: "serve", phase: "SERVE", instruction: "提供する" }
+            ]);
         }
 
-        if (UPPER_OVEN_CODES.has(code)) {
-            return {
-                resource: "OVEN_UPPER",
-                resourceLabel: "上段オーブン 3:00",
-                durationSeconds: 180,
-                trayUnits: 1,
-                passes: 1,
-                instruction: "上段へ投入"
-            };
+        if (code === "1403") {
+            return withSteps({
+                resource: "HEAT", resourceLabel: "IH 1:30",
+                durationSeconds: 90, durationSource: "timetable-equipment",
+                trayUnits: 1, passes: 1, instruction: "ソース・ほうれん草・パンチェッタをIHで加熱"
+            }, [
+                { id: "pan", phase: "PREP", instruction: "フライパンにソテーソース・ほうれん草・パンチェッタを入れる" },
+                { id: "timer", phase: "HEAT", instruction: "自動IHのタイマー加熱", durationSeconds: 60 },
+                { id: "continuous", phase: "HEAT", instruction: "自動IHの連続加熱", durationSeconds: 30 },
+                { id: "serve", phase: "SERVE", instruction: "提供する" }
+            ]);
+        }
+
+        if (code === "1425") {
+            return withSteps({
+                resource: "HEAT", resourceLabel: "レンジ1:00＋盛付",
+                durationSeconds: 90, durationSource: "timetable-total-approx", provisional: true,
+                trayUnits: 1, passes: 1, instruction: "青豆をレンジで温め、半熟卵・チーズをのせる"
+            }, [
+                { id: "beans", phase: "PREP", instruction: "青豆を冷蔵庫から出す" },
+                { id: "microwave", phase: "HEAT", instruction: "レンジで温める", durationSeconds: 60 },
+                { id: "finish", phase: "FINISH", instruction: "小皿に移し、半熟卵・グランモラビアチーズをのせる" },
+                { id: "serve", phase: "SERVE", instruction: "提供する" }
+            ]);
+        }
+
+        if (["3101", "3102", "3103"].includes(code)) {
+            return withSteps({
+                resource: "FLOOR_PREP", resourceLabel: "フロア盛付",
+                durationSeconds: Math.round(fallbackMinutes * 60),
+                durationSource: "menu-master-estimate", provisional: true,
+                trayUnits: 1, passes: 1, instruction: "ライスを盛る"
+            }, [
+                { id: "rice", phase: "TOPPING", instruction: "ライスを盛る" },
+                { id: "serve", phase: "SERVE", instruction: "提供する" }
+            ]);
         }
 
         if (category === "pasta") {
             return {
-                resource: "PASTA",
-                resourceLabel: "自動IH 麺3:00＋ソース1:00",
-                durationSeconds: 180,
-                trayUnits: 1,
-                passes: 1,
-                instruction: "麺とソースを並行開始"
-            };
-        }
-
-        if (CHICKEN_FINISH_CODES.has(code)) {
-            return {
-                resource: "OVEN_UPPER",
-                resourceLabel: "上段オーブン 3:00",
-                durationSeconds: 180,
-                trayUnits: 1,
-                passes: 1,
-                instruction: "仕込み済み鶏＋ポテト・コーン"
-            };
-        }
-
-        if (HAMBURGER_CODES.has(code)) {
-            const eggNote = code === "2403" ? "卵なし" : "最後に焼き卵を載せる";
-            return {
-                resource: "OVEN_UPPER",
-                resourceLabel: "上段オーブン 3:00×2",
-                durationSeconds: 360,
-                trayUnits: 1,
-                passes: 2,
-                instruction: `肉3分→ポテト・コーン3分／${eggNote}`
-            };
-        }
-
-        if (code === "2417") {
-            return {
-                resource: "OVEN_UPPER",
-                resourceLabel: "上段オーブン 3:00・左右2枚",
-                durationSeconds: 180,
-                trayUnits: 2,
-                passes: 1,
-                instruction: "肉と付合せを別鉄板で同時投入・提供時に裏返す"
-            };
-        }
-
-        if (code === "2418") {
-            return {
-                resource: "OVEN_UPPER",
-                resourceLabel: "上段オーブン 6:00（暫定）",
-                durationSeconds: 360,
-                trayUnits: 1,
-                passes: 2,
-                provisional: true,
-                instruction: "全部載せ・6分（工程は要実測確認）"
+                resource: "PASTA", resourceLabel: "麺調理（マスタ目安）",
+                durationSeconds: Math.round(fallbackMinutes * 60),
+                durationSource: "menu-master-estimate", provisional: true,
+                trayUnits: 1, passes: 1, instruction: "麺を茹でてソースを合わせる"
             };
         }
 
@@ -257,12 +357,14 @@
         return STABLE_COLLATOR.compare(String(a ?? ""), String(b ?? ""));
     }
 
-    // 長時間の温製主菜を先に着手し、その間に前菜を仕上げる。前菜はメニューコードで判定する。
+    // 長時間の温製主菜を先に着手し、その間に前菜を仕上げる。
     function workPriority(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
         const code = normalizeCode(item);
+        if (DORIA_CODES.has(code)) return 0;
+        if (/^24\d{2}$/.test(code) && recipe.durationSeconds >= 300) return 0.5;
         if (/^12\d{2}$/.test(code)) return 1;
         if (/^(13|14)\d{2}$/.test(code)) return 2;
-        if (recipe.durationSeconds >= 300 && recipe.resource.startsWith("OVEN_")) return 0;
+        if (recipe.durationSeconds >= 300 && recipe.resource.startsWith("OVEN_")) return 0.5;
         return 3;
     }
 
@@ -428,9 +530,9 @@
 
     function passStarts(task, firstStartSeconds) {
         const passes = Math.max(1, Number(task._recipe.passes) || 1);
-        const passDurationSeconds = task._recipe.durationSeconds / passes;
         return Array.from({ length: passes }, (_, index) =>
-            firstStartSeconds + index * passDurationSeconds
+            firstStartSeconds + (task._recipe.passOffsets?.[index] ??
+                index * task._recipe.durationSeconds / passes)
         );
     }
 
@@ -457,10 +559,10 @@
     }
 
     function canPlacePasses(task, firstStartSeconds, slots, feedSeconds) {
-        const units = Math.max(1, Number(task._recipe.trayUnits) || 1);
         const starts = passStarts(task, firstStartSeconds);
 
         for (let index = 0; index < starts.length; index += 1) {
+            const units = task._recipe.passTrayUnits?.[index] || task._recipe.trayUnits || 1;
             for (let other = index + 1; other < starts.length; other += 1) {
                 if (Math.abs(starts[index] - starts[other]) < feedSeconds - 1e-9) return false;
             }
@@ -514,11 +616,12 @@
     }
 
     function reserveTaskPasses(task, firstStartSeconds, slots) {
-        const units = Math.max(1, Number(task._recipe.trayUnits) || 1);
         const starts = passStarts(task, firstStartSeconds);
         const lanes = [];
 
-        for (const start of starts) {
+        for (let index = 0; index < starts.length; index += 1) {
+            const start = starts[index];
+            const units = task._recipe.passTrayUnits?.[index] || task._recipe.trayUnits || 1;
             let slot = slotAt(slots, start);
             const usedBefore = slot ? slot.usedUnits : 0;
             lanes.push(units === 2 ? "左右" : String(usedBefore + 1));
@@ -529,7 +632,8 @@
                 slots.splice(slotPosition(slots, start), 0, slot);
             }
         }
-        return { starts, lanes };
+        return { starts, lanes, units: starts.map((_, index) =>
+            task._recipe.passTrayUnits?.[index] || task._recipe.trayUnits || 1) };
     }
 
     // 数量分の物理的な鉄板と複数周回を配置し、表示時には元の明細単位へ集約する。
@@ -557,7 +661,7 @@
                 scheduleFinishSeconds: startSeconds + task._recipe.durationSeconds,
                 ovenPassStartSeconds: reservation.starts,
                 ovenPassLanes: reservation.lanes,
-                lane: task._recipe.trayUnits === 2 ? "左右" : reservation.lanes[0]
+                lane: reservation.units[0] === 2 ? "左右" : reservation.lanes[0]
             });
             remaining.splice(remaining.indexOf(task), 1);
         }
@@ -629,7 +733,7 @@
                     startSeconds,
                     pass: passIndex + 1,
                     unit: unit._unitIndex + 1,
-                    trayUnits: unit._recipe.trayUnits,
+                    trayUnits: unit._recipe.passTrayUnits?.[passIndex] || unit._recipe.trayUnits,
                     lane: unit.ovenPassLanes[passIndex]
                 });
             });
@@ -871,7 +975,7 @@
                 exact: true,
                 score: 0,
                 evaluatedTransitions: 0,
-                model: "resource-slot-v4",
+                model: "resource-slot-v5",
                 syncSpreadSeconds: 0,
                 syncSpreadByTable: {},
                 syncSpreadByOrder: {},
@@ -935,7 +1039,7 @@
             exact: synchronized.converged,
             score,
             evaluatedTransitions: tasks.length * synchronized.iterations,
-            model: "resource-slot-v4",
+            model: "resource-slot-v5",
             syncSpreadSeconds: Math.round(synchronized.spread.maximum),
             syncSpreadByTable: Object.fromEntries(
                 Object.entries(synchronized.spread.byTable)
