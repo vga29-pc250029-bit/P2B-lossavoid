@@ -1,8 +1,15 @@
 // 注文APIの情報をKDSへ描画し、整理済み計画とキッチン完成・フロア持出しを管理する。計画は端末内、実際の状態と時刻はAPI経由で保存する。
+import "./kitchen-duplicates.js";
+
 const cookMap = {};
 let latestOrders = [];
 const PLAN_STORAGE_KEY = "lossavoid:kds:organized-plan:v3";
+const DUPLICATE_ACK_KEY = "lossavoid:kds:duplicate-ack:v1";
 let organizedPlan = [];
+let possibleDuplicates = [];
+let unacknowledgedDuplicates = [];
+let duplicateItemIds = new Set();
+let resumeOrganizeAfterReview = false;
 let ordersRefreshing = false;
 const actionInFlight = new Set();
 const seenRawOrderIds = new Set();
@@ -16,6 +23,35 @@ const servedFilterTable = document.getElementById("served-filter-table");
 const servedFilterDish = document.getElementById("served-filter-dish");
 const pickupAlert = document.getElementById("pickup-alert");
 const kdsMessage = document.getElementById("kds-message");
+const duplicateBanner = document.createElement("div");
+duplicateBanner.className = "duplicate-warning-bar hidden";
+duplicateBanner.setAttribute("role", "alert");
+duplicateBanner.innerHTML = '<strong id="duplicate-summary"></strong><button id="duplicate-open" type="button">内容を確認</button>';
+document.querySelector(".kds-header").after(duplicateBanner);
+
+const duplicateModal = document.createElement("div");
+duplicateModal.className = "duplicate-modal hidden";
+duplicateModal.setAttribute("role", "dialog");
+duplicateModal.setAttribute("aria-modal", "true");
+duplicateModal.setAttribute("aria-labelledby", "duplicate-modal-title");
+duplicateModal.innerHTML = `<div class="duplicate-dialog">
+    <header><h2 id="duplicate-modal-title">重複注文の可能性</h2>
+        <button id="duplicate-close" type="button" aria-label="閉じる">×</button></header>
+    <div class="duplicate-list" id="duplicate-list"></div>
+    <footer><button id="duplicate-back" type="button">戻る</button></footer>
+</div>`;
+document.body.append(duplicateModal);
+
+function restoreDuplicateAcknowledgments() {
+    try {
+        const saved = JSON.parse(window.sessionStorage.getItem(DUPLICATE_ACK_KEY) || "[]");
+        return new Set(Array.isArray(saved) ? saved : []);
+    } catch {
+        return new Set();
+    }
+}
+
+const acknowledgedDuplicates = restoreDuplicateAcknowledgments();
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -25,6 +61,84 @@ function escapeHtml(value) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
+
+function renderDuplicateDialog() {
+    const signature = JSON.stringify(unacknowledgedDuplicates);
+    if (duplicateModal.dataset.signature === signature) return;
+    duplicateModal.dataset.signature = signature;
+    document.getElementById("duplicate-list").innerHTML = unacknowledgedDuplicates.map(candidate => `
+        <section class="duplicate-case">
+            <h3>${escapeHtml(formatTableNo(candidate.table))}卓　${escapeHtml(candidate.name)} <span>${escapeHtml(candidate.totalQty)}個</span></h3>
+            <p>${escapeHtml(candidate.tickets.length)}件の別伝票に同じ料理があります。調理前に数量を確認してください。</p>
+            <ul>${candidate.tickets.map(ticket => `<li>
+                <strong>伝票 ${escapeHtml(ticket.orderId)}</strong>
+                <span>${escapeHtml(formatClock(ticket.createdAtMs, false))}・${escapeHtml(ticket.qty)}個</span>
+                <span>未調理 ${escapeHtml(ticket.pendingQty)}個 / 完成待ち ${escapeHtml(ticket.readyQty)}個</span>
+                ${ticket.notes.map(note => `<small>備考: ${escapeHtml(note)}</small>`).join("")}
+            </li>`).join("")}</ul>
+            <button type="button" data-duplicate-key="${escapeHtml(candidate.key)}">注文を確認した</button>
+        </section>`).join("");
+}
+
+function closeDuplicateDialog() {
+    duplicateModal.classList.add("hidden");
+    resumeOrganizeAfterReview = false;
+}
+
+function openDuplicateDialog(continueOrganize = false) {
+    if (!unacknowledgedDuplicates.length) return;
+    resumeOrganizeAfterReview = continueOrganize;
+    renderDuplicateDialog();
+    duplicateModal.classList.remove("hidden");
+    document.getElementById("duplicate-close").focus();
+}
+
+function updateDuplicateWarnings() {
+    const kitchenOrders = latestOrders.map(order => ({
+        ...order,
+        items: order.items.filter(item => isKitchenTarget(cookMap[String(item.code)]))
+    }));
+    possibleDuplicates = window.KitchenDuplicates.findPossibleDuplicates(kitchenOrders);
+    unacknowledgedDuplicates = possibleDuplicates.filter(candidate => !acknowledgedDuplicates.has(candidate.key));
+    duplicateItemIds = new Set(unacknowledgedDuplicates.flatMap(candidate =>
+        candidate.tickets.flatMap(ticket => ticket.itemIds)));
+    const first = unacknowledgedDuplicates[0];
+    duplicateBanner.classList.toggle("hidden", !first);
+    const summary = first
+        ? `重複の可能性 ${unacknowledgedDuplicates.length}件：${formatTableNo(first.table)}卓 ${first.name}` : "";
+    const summaryElement = document.getElementById("duplicate-summary");
+    if (summaryElement.textContent !== summary) summaryElement.textContent = summary;
+    if (!duplicateModal.classList.contains("hidden")) {
+        if (first) renderDuplicateDialog();
+        else closeDuplicateDialog();
+    }
+}
+
+document.getElementById("duplicate-open").addEventListener("click", () => openDuplicateDialog());
+document.getElementById("duplicate-close").addEventListener("click", closeDuplicateDialog);
+document.getElementById("duplicate-back").addEventListener("click", closeDuplicateDialog);
+duplicateModal.addEventListener("click", event => {
+    if (event.target === duplicateModal) closeDuplicateDialog();
+    const button = event.target.closest?.("button[data-duplicate-key]");
+    if (!button) return;
+    acknowledgedDuplicates.add(button.dataset.duplicateKey);
+    try {
+        window.sessionStorage.setItem(DUPLICATE_ACK_KEY, JSON.stringify([...acknowledgedDuplicates]));
+    } catch (error) {
+        console.warn("重複確認の記録を保存できませんでした", error);
+    }
+    const shouldResume = resumeOrganizeAfterReview;
+    updateDuplicateWarnings();
+    renderRawOrders();
+    renderOrganizedPanel();
+    if (!unacknowledgedDuplicates.length && shouldResume) organizePendingItems();
+    else if (!duplicateModal.classList.contains("hidden")) {
+        duplicateModal.querySelector("button[data-duplicate-key]")?.focus();
+    }
+});
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !duplicateModal.classList.contains("hidden")) closeDuplicateDialog();
+});
 
 // 5秒ごとの再取得で工程の展開状態を閉じないよう、表示場所と明細IDで区別して保持する。
 document.addEventListener("toggle", event => {
@@ -298,13 +412,14 @@ function showMessage(text, tone = "info") {
 function rawItemHtml(group) {
     const { item, cookInfo } = group.entries[0];
     const ready = item.workflowState === "KITCHEN_READY";
+    const suspect = group.entries.some(entry => duplicateItemIds.has(String(entry.item.id)));
     const readyAt = ready ? Math.min(...group.entries.map(entry => entry.item.kitchenReadyAtMs || Date.now())) : null;
     const displayName = cookInfo.shortName || item.name;
     const stateHtml = ready
         ? `<span class="raw-state ready"><span class="wait-elapsed">カウンター待ち</span></span>`
         : `<span class="raw-state">未調理</span>`;
     return `
-        <div class="raw-item-row ${ready ? "counter-waiting" : ""}"
+        <div class="raw-item-row ${ready ? "counter-waiting" : ""} ${suspect ? "duplicate-suspect" : ""}"
              ${ready ? `data-ready-at="${readyAt}"` : ""}>
             <span class="raw-item-name">${escapeHtml(group.qty)} ${escapeHtml(displayName)}</span>
             <span class="recipe-chip">${escapeHtml(item.recipe.resourceLabel)}</span>
@@ -350,10 +465,11 @@ function renderRawOrders() {
 
 function counterRowHtml(group, animate = false) {
     const { order, item, cookInfo } = group.entries[0];
+    const suspect = group.entries.some(entry => duplicateItemIds.has(String(entry.item.id)));
     const name = cookInfo.shortName || item.name;
     const readyAt = Math.min(...group.entries.map(entry => entry.item.kitchenReadyAtMs || Date.now()));
     return `
-        <article class="workflow-row counter-action-row counter-waiting${animate ? " workflow-enter" : ""}"
+        <article class="workflow-row counter-action-row counter-waiting${suspect ? " duplicate-suspect" : ""}${animate ? " workflow-enter" : ""}"
                  data-item-id="${escapeHtml(item.id)}"
                  data-ready-at="${escapeHtml(readyAt)}" data-qty="${escapeHtml(group.qty)}"
                  data-unit-actions="${group.entries.length > 1}">
@@ -372,6 +488,7 @@ function counterRowHtml(group, animate = false) {
 
 function planRowHtml(group, sequence, animate = false) {
     const { current, planItem: firstPlan } = group.entries[0];
+    const suspect = group.entries.some(entry => duplicateItemIds.has(String(entry.current.item.id)));
     let unitOffset = 0;
     const allFeedEvents = group.entries.flatMap(entry => {
         const events = (entry.planItem.ovenFeedEvents || []).map(event => ({
@@ -405,7 +522,7 @@ function planRowHtml(group, sequence, animate = false) {
         }).join("")}</div>`
         : "";
     return `
-        <article class="workflow-row planned-row${animate ? " workflow-enter" : ""}" data-item-id="${escapeHtml(current.item.id)}"
+        <article class="workflow-row planned-row${suspect ? " duplicate-suspect" : ""}${animate ? " workflow-enter" : ""}" data-item-id="${escapeHtml(current.item.id)}"
                  data-plan-start-at="${escapeHtml(planItem.scheduledStartAtMs || "")}">
             <button class="floor-pickup-button" type="button" disabled>フロア待機</button>
             <div class="workflow-main">
@@ -488,6 +605,7 @@ function renderOrganizedPanel() {
 
 function renderOrders(orders) {
     latestOrders = orders.map(normalizeOracleOrder);
+    updateDuplicateWarnings();
     renderRawOrders();
     renderOrganizedPanel();
     if (servedModal && !servedModal.classList.contains("hidden")) renderServedTable();
@@ -525,7 +643,7 @@ function buildScheduleInput() {
 }
 
 // 投入時刻に達した項目は固定し、残りだけを計算し直す。整理結果は端末内に保存し、注文状態そのものは変えない。
-document.getElementById("organize-btn").addEventListener("click", () => {
+function organizePendingItems() {
     const input = buildScheduleInput();
     if (!input.length) {
         organizedPlan = [];
@@ -567,6 +685,14 @@ document.getElementById("organize-btn").addEventListener("click", () => {
     persistOrganizedPlan();
     renderOrganizedPanel();
     console.info("KDS resource schedule", schedule);
+}
+
+document.getElementById("organize-btn").addEventListener("click", () => {
+    if (unacknowledgedDuplicates.length) {
+        openDuplicateDialog(true);
+        return;
+    }
+    organizePendingItems();
 });
 
 document.getElementById("delete-btn").addEventListener("click", () => {
