@@ -257,13 +257,23 @@
         return STABLE_COLLATOR.compare(String(a ?? ""), String(b ?? ""));
     }
 
+    // 長時間の温製主菜を先に着手し、その間に前菜を仕上げる。前菜はメニューコードで判定する。
+    function workPriority(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
+        const code = normalizeCode(item);
+        if (/^12\d{2}$/.test(code)) return 1;
+        if (/^(13|14)\d{2}$/.test(code)) return 2;
+        if (recipe.durationSeconds >= 300 && recipe.resource.startsWith("OVEN_")) return 0;
+        return 3;
+    }
+
     function priorityCompare(a, b) {
-        if (a._episodePriorityRank !== b._episodePriorityRank) {
-            return a._episodePriorityRank - b._episodePriorityRank;
-        }
         const aOverdue = a._slackSeconds < 0 ? 0 : 1;
         const bOverdue = b._slackSeconds < 0 ? 0 : 1;
         if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+        if (a._workPriority !== b._workPriority) return a._workPriority - b._workPriority;
+        if (a._episodePriorityRank !== b._episodePriorityRank) {
+            return a._episodePriorityRank - b._episodePriorityRank;
+        }
         if (a._slackSeconds !== b._slackSeconds) return a._slackSeconds - b._slackSeconds;
         if (a._createdAtMs !== b._createdAtMs) return a._createdAtMs - b._createdAtMs;
         if (a._desiredStartSeconds !== b._desiredStartSeconds) {
@@ -281,14 +291,18 @@
 
     // 別注文を同じ卓だけで束ねず、伝票内の長い工程を起点に短い工程を部分的に遅らせる。
     function prepare(items, nowMs, settings) {
-        const enriched = items.map((item, index) => ({
-            ...item,
-            _inputIndex: index,
-            _recipe: resolveRecipe(item),
-            _createdAtMs: Number(item.createdAtMs) || nowMs,
-            _table: String(item.table ?? "--"),
-            _episode: episodeKey(item, index)
-        }));
+        const enriched = items.map((item, index) => {
+            const recipe = resolveRecipe(item);
+            return {
+                ...item,
+                _inputIndex: index,
+                _recipe: recipe,
+                _workPriority: workPriority(item, recipe),
+                _createdAtMs: Number(item.createdAtMs) || nowMs,
+                _table: String(item.table ?? "--"),
+                _episode: episodeKey(item, index)
+            };
+        });
 
         const longestByEpisode = new Map();
         const oldestByEpisode = new Map();
@@ -898,6 +912,7 @@
             ...items[task._inputIndex],
             sequence: index + 1,
             recipe: { ...task._recipe },
+            workPriority: task._workPriority,
             scheduleStartSeconds: Math.round(task.scheduleStartSeconds * 1000) / 1000,
             scheduleFinishSeconds: Math.round(task.scheduleFinishSeconds * 1000) / 1000,
             batchNumber: task.batchNumber,
@@ -958,5 +973,5 @@
         };
     }
 
-    return { scheduleKitchenItems, resolveRecipe, episodeKey };
+    return { scheduleKitchenItems, resolveRecipe, episodeKey, workPriority };
 });

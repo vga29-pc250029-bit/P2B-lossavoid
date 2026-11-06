@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { performance } = require('node:perf_hooks');
-const { resolveRecipe, scheduleKitchenItems, episodeKey } = require('../src/main/resources/static/kitchen-scheduler.js');
+const { resolveRecipe, scheduleKitchenItems, episodeKey, workPriority } = require('../src/main/resources/static/kitchen-scheduler.js');
 
 const NOW = Date.parse('2026-10-23T03:00:00Z');
 
@@ -81,6 +81,27 @@ test('starts both dorias before the salad and keeps distinct tickets at one tabl
     assert.equal(byId.get('later-salad').scheduleStartSeconds, 0);
     assert.equal(result.syncSpreadByOrder.A, 63);
     assert.equal(result.syncSpreadByOrder.B, 0);
+});
+
+test('classifies long hot mains before salad, 14xx appetizers, pizza and pasta', () => {
+    assert.equal(workPriority(item({ code: '2110', menuCategory: 'doria', cookTime: 6 })), 0);
+    assert.equal(workPriority(item({ code: '2418', menuCategory: 'meat', cookTime: 6 })), 0);
+    assert.equal(workPriority(item({ code: '1209', menuCategory: 'appetizer', cookTime: 2 })), 1);
+    assert.equal(workPriority(item({ code: '1402', menuCategory: 'appetizer', cookTime: 6 })), 2);
+    assert.equal(workPriority(item({ code: '2206', menuCategory: 'pizza', cookTime: 3 })), 3);
+    assert.equal(workPriority(item({ code: '2305', menuCategory: 'pasta', cookTime: 3 })), 3);
+});
+
+test('a doria takes the lower-oven priority over 14xx appetizer and grill over pizza', () => {
+    const result = scheduleKitchenItems([
+        item({ orderId: 'A', itemId: 'arrosticini', code: '1402', cookTime: 6, menuCategory: 'appetizer' }),
+        item({ orderId: 'B', itemId: 'pizza', code: '2206', cookTime: 3, menuCategory: 'pizza' }),
+        item({ orderId: 'C', itemId: 'grill', code: '2418', cookTime: 6, menuCategory: 'meat' }),
+        item({ orderId: 'D', itemId: 'doria', code: '2110', cookTime: 6, menuCategory: 'doria' })
+    ], { nowMs: NOW });
+    const firstByResource = resource => result.items.find(value => value.recipe.resource === resource);
+    assert.equal(firstByResource('OVEN_LOWER').itemId, 'doria');
+    assert.equal(firstByResource('OVEN_UPPER').itemId, 'grill');
 });
 
 test('a locked completion anchors only its own ticket, not another order at the same table', () => {

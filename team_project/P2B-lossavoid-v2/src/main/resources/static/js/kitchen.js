@@ -141,6 +141,23 @@ function getActiveItems() {
     return result;
 }
 
+// 画面上だけ同じ伝票・商品・状態を束ねる。DBの明細IDは各1個のまま保持する。
+function groupMenuEntries(entries) {
+    const groups = new Map();
+    entries.forEach(entry => {
+        const { order, item } = entry.current || entry;
+        const key = JSON.stringify([
+            order.id, item.code, item.name, item.note || "", item.price, item.workflowState,
+            Number(item.qty) === 1 ? "unit" : `legacy-${item.id}`
+        ]);
+        if (!groups.has(key)) groups.set(key, { entries: [], qty: 0 });
+        const group = groups.get(key);
+        group.entries.push(entry);
+        group.qty += Math.max(1, Number(item.qty) || 1);
+    });
+    return [...groups.values()];
+}
+
 function formatClock(ms, seconds = true) {
     if (!ms) return "--:--";
     return new Date(ms).toLocaleTimeString("ja-JP", {
@@ -278,16 +295,18 @@ function showMessage(text, tone = "info") {
     window.setTimeout(() => kdsMessage.classList.add("hidden"), 4500);
 }
 
-function rawItemHtml(item, cookInfo) {
+function rawItemHtml(group) {
+    const { item, cookInfo } = group.entries[0];
     const ready = item.workflowState === "KITCHEN_READY";
+    const readyAt = ready ? Math.min(...group.entries.map(entry => entry.item.kitchenReadyAtMs || Date.now())) : null;
     const displayName = cookInfo.shortName || item.name;
     const stateHtml = ready
         ? `<span class="raw-state ready"><span class="wait-elapsed">カウンター待ち</span></span>`
         : `<span class="raw-state">未調理</span>`;
     return `
         <div class="raw-item-row ${ready ? "counter-waiting" : ""}"
-             ${ready && item.kitchenReadyAtMs ? `data-ready-at="${item.kitchenReadyAtMs}"` : ""}>
-            <span class="raw-item-name">${escapeHtml(item.qty)} ${escapeHtml(displayName)}</span>
+             ${ready ? `data-ready-at="${readyAt}"` : ""}>
+            <span class="raw-item-name">${escapeHtml(group.qty)} ${escapeHtml(displayName)}</span>
             <span class="recipe-chip">${escapeHtml(item.recipe.resourceLabel)}</span>
             ${stateHtml}
             ${recipeStepsHtml(item.recipe, item.id, "raw")}
@@ -306,12 +325,12 @@ function renderRawOrders() {
 
     const cards = [];
     displayOrders.forEach(order => {
-        const itemsHtml = order.items.map(item => {
-            if (item.hidden) return "";
+        const entries = order.items.flatMap(item => {
+            if (item.hidden) return [];
             const cookInfo = cookMap[String(item.code)];
-            if (!isKitchenTarget(cookInfo)) return "";
-            return rawItemHtml(item, cookInfo);
-        }).join("");
+            return isKitchenTarget(cookInfo) ? [{ order, item, cookInfo }] : [];
+        });
+        const itemsHtml = groupMenuEntries(entries).map(rawItemHtml).join("");
         if (!itemsHtml) return;
         const enterClass = seenRawOrderIds.has(String(order.id)) ? "" : " ticket-enter";
         cards.push(`
@@ -329,27 +348,45 @@ function renderRawOrders() {
     orderContainer.innerHTML = cards.join("");
 }
 
-function counterRowHtml(entry, animate = false) {
-    const { order, item, cookInfo } = entry;
+function counterRowHtml(group, animate = false) {
+    const { order, item, cookInfo } = group.entries[0];
     const name = cookInfo.shortName || item.name;
+    const readyAt = Math.min(...group.entries.map(entry => entry.item.kitchenReadyAtMs || Date.now()));
     return `
         <article class="workflow-row counter-action-row counter-waiting${animate ? " workflow-enter" : ""}"
                  data-item-id="${escapeHtml(item.id)}"
-                 data-ready-at="${escapeHtml(item.kitchenReadyAtMs || "")}">
+                 data-ready-at="${escapeHtml(readyAt)}" data-qty="${escapeHtml(group.qty)}"
+                 data-unit-actions="${group.entries.length > 1}">
             <button class="floor-pickup-button" type="button"
                     data-action="floor-picked" data-item-id="${escapeHtml(item.id)}">
-                持出し <span class="wait-elapsed">0秒</span>
+                ${group.entries.length > 1 ? "1個持出し" : "持出し"} <span class="wait-elapsed">0秒</span>
             </button>
             <div class="workflow-main">
-                <div class="workflow-title">${escapeHtml(formatTableNo(order.table))}卓　${escapeHtml(item.qty)} ${escapeHtml(name)}</div>
-                <div class="workflow-meta">${escapeHtml(item.recipe.resourceLabel)}・完成 ${escapeHtml(formatClock(item.kitchenReadyAtMs))}</div>
+                <div class="workflow-title">${escapeHtml(formatTableNo(order.table))}卓　${escapeHtml(group.qty)} ${escapeHtml(name)}</div>
+                <div class="workflow-meta">${escapeHtml(item.recipe.resourceLabel)}・最初の完成 ${escapeHtml(formatClock(readyAt))}</div>
                 ${recipeStepsHtml(item.recipe, item.id, "counter")}
             </div>
             <button class="kitchen-ready-button is-done" type="button" disabled>完成済</button>
         </article>`;
 }
 
-function planRowHtml(planItem, current, animate = false) {
+function planRowHtml(group, sequence, animate = false) {
+    const { current, planItem: firstPlan } = group.entries[0];
+    let unitOffset = 0;
+    const allFeedEvents = group.entries.flatMap(entry => {
+        const events = (entry.planItem.ovenFeedEvents || []).map(event => ({
+            ...event,
+            unit: unitOffset + (Number(event.unit) || 1)
+        }));
+        unitOffset += Math.max(1, Number(entry.current.item.qty) || 1);
+        return events;
+    }).sort((a, b) => Number(a.scheduledAtMs) - Number(b.scheduledAtMs));
+    const planItem = {
+        ...firstPlan,
+        sequence,
+        scheduledStartAtMs: Math.min(...group.entries.map(entry => Number(entry.planItem.scheduledStartAtMs))),
+        ovenFeedEvents: allFeedEvents
+    };
     // 保存済みの古い整理結果にも、最新の工程定義を表示する。予定時刻そのものは変えない。
     const recipe = current.item.recipe.steps ? current.item.recipe : (planItem.recipe || current.item.recipe);
     const feedEvents = Array.isArray(planItem.ovenFeedEvents) ? planItem.ovenFeedEvents : [];
@@ -360,7 +397,8 @@ function planRowHtml(planItem, current, animate = false) {
         : `順番${planItem.batchNumber}`;
     const feedHtml = feedEvents.length > 1
         ? `<div class="workflow-feeds">${feedEvents.map(event => {
-            const unitLabel = Number(current.item.qty) > 1 ? `${event.unit}枚目・` : "";
+            const unitLabel = group.entries.length > 1 ? `${event.unit}品目・` :
+                (Number(current.item.qty) > 1 ? `${event.unit}枚目・` : "");
             const passLabel = Number(recipe.passes) > 1 ? `${event.pass}周目・` : "";
             const laneLabel = event.lane === "左右" ? "左右2枚" : `レーン${event.lane}`;
             return `<span>${escapeHtml(unitLabel + passLabel + laneLabel)} <strong class="plan-feed-label" data-feed-at="${escapeHtml(event.scheduledAtMs || "")}">${escapeHtml(planStartText(Number(event.scheduledAtMs)))}</strong></span>`;
@@ -371,16 +409,32 @@ function planRowHtml(planItem, current, animate = false) {
                  data-plan-start-at="${escapeHtml(planItem.scheduledStartAtMs || "")}">
             <button class="floor-pickup-button" type="button" disabled>フロア待機</button>
             <div class="workflow-main">
-                <div class="workflow-title"><span class="sequence-number">${escapeHtml(planItem.sequence)}</span>${escapeHtml(formatTableNo(current.order.table))}卓　${escapeHtml(current.item.qty)} ${escapeHtml(current.cookInfo.shortName || current.item.name)}</div>
+                <div class="workflow-title"><span class="sequence-number">${escapeHtml(planItem.sequence)}</span>${escapeHtml(formatTableNo(current.order.table))}卓　${escapeHtml(group.qty)} ${escapeHtml(current.cookInfo.shortName || current.item.name)}</div>
                 <div class="workflow-meta"><strong class="plan-start-label">${escapeHtml(planStartText(Number(planItem.scheduledStartAtMs)))}</strong>・${escapeHtml(recipe.resourceLabel)}・${escapeHtml(ovenSlot)}</div>
                 ${recipe.steps ? recipeStepsHtml(recipe, current.item.id, "plan") : `<div class="workflow-instruction">${escapeHtml(recipe.instruction)}</div>`}
                 ${feedHtml}
             </div>
             <button class="kitchen-ready-button" type="button"
                     data-action="kitchen-ready" data-item-id="${escapeHtml(current.item.id)}">
-                調理完了
+                ${group.entries.length > 1 ? "1個完了" : "調理完了"}
             </button>
         </article>`;
+}
+
+function comparePlanGroups(a, b) {
+    // 表示は提供順の優先度、投入は各行の予定時刻で示す。空きレーンへの並行投入は妨げない。
+    const first = group => group.entries[0];
+    const priority = group => window.KitchenScheduler.workPriority(first(group).current.item);
+    const priorityDiff = priority(a) - priority(b);
+    if (priorityDiff) return priorityDiff;
+    const startDiff = Number(first(a).planItem.scheduledStartAtMs) -
+        Number(first(b).planItem.scheduledStartAtMs);
+    if (startDiff) return startDiff;
+    const resourceRank = { OVEN_LOWER: 0, OVEN_UPPER: 1, PASTA: 2, COLD_PREP: 3 };
+    const resourceDiff = (resourceRank[first(a).current.item.recipe.resource] ?? 4) -
+        (resourceRank[first(b).current.item.recipe.resource] ?? 4);
+    if (resourceDiff) return resourceDiff;
+    return Number(first(a).current.item.id) - Number(first(b).current.item.id);
 }
 
 function renderOrganizedPanel() {
@@ -395,32 +449,35 @@ function renderOrganizedPanel() {
     const counterItems = active
         .filter(entry => entry.item.workflowState === "KITCHEN_READY")
         .sort((a, b) => (a.item.kitchenReadyAtMs || 0) - (b.item.kitchenReadyAtMs || 0));
+    const counterGroups = groupMenuEntries(counterItems);
     const pendingPlan = organizedPlan
         .map(planItem => ({ planItem, current: byItemId.get(String(planItem.itemId)) }))
         .filter(entry => entry.current?.item.workflowState === "PENDING");
+    const pendingGroups = groupMenuEntries(pendingPlan).sort(comparePlanGroups);
 
     const pendingIds = new Set(pendingPlan.map(entry => String(entry.current.item.id)));
     const unscheduledCount = active.filter(entry =>
-        entry.item.workflowState === "PENDING" && !pendingIds.has(String(entry.item.id))).length;
+        entry.item.workflowState === "PENDING" && !pendingIds.has(String(entry.item.id)))
+        .reduce((sum, entry) => sum + Math.max(1, Number(entry.item.qty) || 1), 0);
 
     let html = "";
-    if (counterItems.length) {
-        const counterHtml = counterItems.map(entry => {
-            const key = `${entry.item.id}:KITCHEN_READY`;
+    if (counterGroups.length) {
+        const counterHtml = counterGroups.map(group => {
+            const key = `${group.entries[0].item.id}:KITCHEN_READY`;
             const animate = !seenWorkflowKeys.has(key);
             seenWorkflowKeys.add(key);
-            return counterRowHtml(entry, animate);
+            return counterRowHtml(group, animate);
         }).join("");
-        html += `<section class="workflow-section"><h2>カウンター待ち <span>${counterItems.length}品</span></h2>${counterHtml}</section>`;
+        html += `<section class="workflow-section"><h2>カウンター待ち <span>${counterGroups.reduce((sum, group) => sum + group.qty, 0)}品</span></h2>${counterHtml}</section>`;
     }
-    if (pendingPlan.length) {
-        const pendingHtml = pendingPlan.map(entry => {
-            const key = `${entry.current.item.id}:PENDING`;
+    if (pendingGroups.length) {
+        const pendingHtml = pendingGroups.map((group, index) => {
+            const key = `${group.entries[0].current.item.id}:PENDING`;
             const animate = !seenWorkflowKeys.has(key);
             seenWorkflowKeys.add(key);
-            return planRowHtml(entry.planItem, entry.current, animate);
+            return planRowHtml(group, index + 1, animate);
         }).join("");
-        html += `<section class="workflow-section"><h2>整理後の調理順 <span>${pendingPlan.length}品</span></h2>${pendingHtml}</section>`;
+        html += `<section class="workflow-section"><h2>整理後の調理順 <span>${pendingGroups.reduce((sum, group) => sum + group.qty, 0)}品</span></h2>${pendingHtml}</section>`;
     }
     if (unscheduledCount > 0) {
         html += `<div class="organize-notice">未整理 ${unscheduledCount}品</div>`;
@@ -571,8 +628,8 @@ function updateCounterWaitingClocks() {
         });
         const pickupButton = row.querySelector(".floor-pickup-button:not([disabled])");
         if (pickupButton) {
-            pickupButton.setAttribute("aria-label", `${overdue ? "至急 " : ""}フロア持出し、待ち${formatElapsed(elapsedSeconds)}`);
-            if (overdue) overdueCount += 1;
+            pickupButton.setAttribute("aria-label", `${overdue ? "至急 " : ""}${row.dataset.unitActions === "true" ? "1個を" : ""}フロア持出し、待ち${formatElapsed(elapsedSeconds)}`);
+            if (overdue) overdueCount += Number(row.dataset.qty) || 1;
         }
     });
     if (pickupAlert) {
