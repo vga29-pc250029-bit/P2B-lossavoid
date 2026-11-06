@@ -8,6 +8,7 @@
 
     const DEFAULTS = {
         targetWaitMinutes: 12,
+        syncAlignment: 0.7,
         // 1mの炉内を、搬送方向13cmの鉄板が隙間なく進む暫定値。
         // 実測後はここだけを変更すれば投入枠が再計算される。
         upperFeedSeconds: 23,
@@ -49,6 +50,10 @@
 
     function normalizeCode(item) {
         return String(item.code ?? item.menuCode ?? "").trim();
+    }
+
+    function episodeKey(item, index = 0) {
+        return `${String(item.orderId ?? `item-${index}`)}\u0000${String(item.table ?? "--")}`;
     }
 
     // 手作業の時間は未計測のまま保持し、機器の加熱時間や「0秒」と混同しない。
@@ -253,8 +258,8 @@
     }
 
     function priorityCompare(a, b) {
-        if (a._tablePriorityRank !== b._tablePriorityRank) {
-            return a._tablePriorityRank - b._tablePriorityRank;
+        if (a._episodePriorityRank !== b._episodePriorityRank) {
+            return a._episodePriorityRank - b._episodePriorityRank;
         }
         const aOverdue = a._slackSeconds < 0 ? 0 : 1;
         const bOverdue = b._slackSeconds < 0 ? 0 : 1;
@@ -274,72 +279,79 @@
         return stableCompare(a.itemId ?? a.itemIndex, b.itemId ?? b.itemIndex);
     }
 
-    // 同卓の最長工程から短い料理の開始希望時刻をずらす。全設備で卓の優先順を共通にして同期の循環を防ぐ。
+    // 別注文を同じ卓だけで束ねず、伝票内の長い工程を起点に短い工程を部分的に遅らせる。
     function prepare(items, nowMs, settings) {
         const enriched = items.map((item, index) => ({
             ...item,
             _inputIndex: index,
             _recipe: resolveRecipe(item),
             _createdAtMs: Number(item.createdAtMs) || nowMs,
-            _table: String(item.table ?? "--")
+            _table: String(item.table ?? "--"),
+            _episode: episodeKey(item, index)
         }));
 
-        const longestByTable = new Map();
-        const oldestByTable = new Map();
+        const longestByEpisode = new Map();
+        const oldestByEpisode = new Map();
         for (const task of enriched) {
-            longestByTable.set(
-                task._table,
-                Math.max(longestByTable.get(task._table) || 0, task._recipe.durationSeconds)
+            const locked = settings.episodeCriticalSeconds instanceof Map ?
+                settings.episodeCriticalSeconds.get(task._episode) :
+                settings.episodeCriticalSeconds?.[task._episode];
+            longestByEpisode.set(
+                task._episode,
+                Math.max(longestByEpisode.get(task._episode) || 0, task._recipe.durationSeconds,
+                    Number.isFinite(Number(locked)) ? Number(locked) : 0)
             );
-            oldestByTable.set(
-                task._table,
-                Math.min(oldestByTable.get(task._table) ?? Number.POSITIVE_INFINITY, task._createdAtMs)
+            oldestByEpisode.set(
+                task._episode,
+                Math.min(oldestByEpisode.get(task._episode) ?? Number.POSITIVE_INFINITY, task._createdAtMs)
             );
         }
 
-        // Every resource uses the same table order. Without this shared order,
-        // upper and lower ovens can each put a different table first and table
-        // synchronization oscillates forever (a classic job-shop cycle).
-        const tablePriority = new Map(
-            [...longestByTable.keys()]
+        // A common ticket order across resources prevents cross-oven priority cycles.
+        const episodePriority = new Map(
+            [...longestByEpisode.keys()]
                 .sort((a, b) => {
-                    const aSlack = (oldestByTable.get(a) + settings.targetWaitMinutes * 60000 - nowMs) / 1000 -
-                        longestByTable.get(a);
-                    const bSlack = (oldestByTable.get(b) + settings.targetWaitMinutes * 60000 - nowMs) / 1000 -
-                        longestByTable.get(b);
+                    const aSlack = (oldestByEpisode.get(a) + settings.targetWaitMinutes * 60000 - nowMs) / 1000 -
+                        longestByEpisode.get(a);
+                    const bSlack = (oldestByEpisode.get(b) + settings.targetWaitMinutes * 60000 - nowMs) / 1000 -
+                        longestByEpisode.get(b);
                     const aOverdue = aSlack < 0 ? 0 : 1;
                     const bOverdue = bSlack < 0 ? 0 : 1;
                     if (aOverdue !== bOverdue) return aOverdue - bOverdue;
                     if (aSlack !== bSlack) return aSlack - bSlack;
-                    if (oldestByTable.get(a) !== oldestByTable.get(b)) {
-                        return oldestByTable.get(a) - oldestByTable.get(b);
+                    if (oldestByEpisode.get(a) !== oldestByEpisode.get(b)) {
+                        return oldestByEpisode.get(a) - oldestByEpisode.get(b);
                     }
                     return stableCompare(a, b);
                 })
-                .map((table, index) => [table, index])
+                .map((episode, index) => [episode, index])
         );
 
         return enriched.map(task => {
-            const tableCriticalSeconds = longestByTable.get(task._table) || task._recipe.durationSeconds;
+            const episodeCriticalSeconds = longestByEpisode.get(task._episode) || task._recipe.durationSeconds;
             const dueAtMs = task._createdAtMs + settings.targetWaitMinutes * 60000;
-            const anchoredFinishSeconds = tableTargetFinishSeconds(settings, task._table);
-            const desiredStartSeconds = Math.max(
-                0,
-                tableCriticalSeconds - task._recipe.durationSeconds,
-                anchoredFinishSeconds - task._recipe.durationSeconds
-            );
+            const anchoredFinishSeconds = episodeTargetFinishSeconds(settings, task);
+            const allowedLeadSeconds = (1 - settings.syncAlignment) *
+                (episodeCriticalSeconds - task._recipe.durationSeconds);
+            const desiredStartSeconds = Math.max(0, anchoredFinishSeconds > 0 ?
+                anchoredFinishSeconds - task._recipe.durationSeconds - allowedLeadSeconds :
+                settings.syncAlignment * (episodeCriticalSeconds - task._recipe.durationSeconds));
             return {
                 ...task,
-                _tablePriorityRank: tablePriority.get(task._table),
+                _episodePriorityRank: episodePriority.get(task._episode),
+                _episodeCriticalSeconds: episodeCriticalSeconds,
                 _baseDesiredStartSeconds: desiredStartSeconds,
                 _desiredStartSeconds: desiredStartSeconds,
-                _slackSeconds: (dueAtMs - nowMs) / 1000 - tableCriticalSeconds,
+                _slackSeconds: (dueAtMs - nowMs) / 1000 - episodeCriticalSeconds,
                 _dueAtMs: dueAtMs
             };
         });
     }
 
     function partnerCompare(seed, a, b) {
+        const aSameEpisode = a._episode === seed._episode ? 0 : 1;
+        const bSameEpisode = b._episode === seed._episode ? 0 : 1;
+        if (aSameEpisode !== bSameEpisode) return aSameEpisode - bSameEpisode;
         const aSameTable = a._table === seed._table ? 0 : 1;
         const bSameTable = b._table === seed._table ? 0 : 1;
         if (aSameTable !== bSameTable) return aSameTable - bSameTable;
@@ -357,10 +369,13 @@
         return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
     }
 
-    function tableTargetFinishSeconds(settings, table) {
-        const targets = settings.tableTargetFinishSeconds;
-        const value = targets instanceof Map ? targets.get(table) : targets?.[table];
-        return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+    function episodeTargetFinishSeconds(settings, task) {
+        const targets = settings.episodeTargetFinishSeconds;
+        const value = targets instanceof Map ? targets.get(task._episode) : targets?.[task._episode];
+        if (Number.isFinite(Number(value))) return Math.max(0, Number(value));
+        const legacy = settings.tableTargetFinishSeconds;
+        const legacyValue = legacy instanceof Map ? legacy.get(task._table) : legacy?.[task._table];
+        return Number.isFinite(Number(legacyValue)) ? Math.max(0, Number(legacyValue)) : 0;
     }
 
     // 既に投入された枠を予約として読み込み、左右の容量と投入間隔に矛盾がある予約は拒否する。
@@ -668,12 +683,12 @@
     }
 
     function synchronizationSpread(scheduled) {
-        const resourceFinishByTable = new Map();
+        const resourceFinishByEpisode = new Map();
         for (const task of scheduled) {
-            if (!resourceFinishByTable.has(task._table)) {
-                resourceFinishByTable.set(task._table, new Map());
+            if (!resourceFinishByEpisode.has(task._episode)) {
+                resourceFinishByEpisode.set(task._episode, { table: task._table, resources: new Map() });
             }
-            const byResource = resourceFinishByTable.get(task._table);
+            const byResource = resourceFinishByEpisode.get(task._episode).resources;
             byResource.set(
                 task._recipe.resource,
                 Math.max(byResource.get(task._recipe.resource) || 0, task.scheduleFinishSeconds)
@@ -681,37 +696,41 @@
         }
 
         const byTable = {};
+        const byEpisode = {};
         const shape = [];
         const absoluteShape = [];
         let maximum = 0;
-        for (const [table, byResource] of [...resourceFinishByTable]
+        for (const [episode, group] of [...resourceFinishByEpisode]
             .sort(([a], [b]) => stableCompare(a, b))) {
+            const { table, resources: byResource } = group;
             const finishes = [...byResource.values()];
             const spread = finishes.length > 1 ? Math.max(...finishes) - Math.min(...finishes) : 0;
-            byTable[table] = spread;
+            byEpisode[episode] = spread;
+            byTable[table] = Math.max(byTable[table] || 0, spread);
             maximum = Math.max(maximum, spread);
             const tableMaximum = Math.max(...finishes);
             shape.push([
-                table,
+                episode,
                 [...byResource]
                     .sort(([a], [b]) => stableCompare(a, b))
                     .map(([resource, finish]) => [resource, finish - tableMaximum])
             ]);
             absoluteShape.push([
-                table,
+                episode,
                 [...byResource].sort(([a], [b]) => stableCompare(a, b))
             ]);
         }
         return {
             maximum,
             byTable,
+            byEpisode,
             signature: JSON.stringify(shape),
             absoluteSignature: JSON.stringify(absoluteShape)
         };
     }
 
-    // 設備別の最終完成を卓ごとに揃えるよう反復する。混雑時の許容差と反復上限を設け、収束しない場合も情報を返す。
-    function synchronizeTables(tasks, settings) {
+    // 実際の設備枠で遅れた工程を再配置し、同一伝票内の完成差の70%を詰める。
+    function synchronizeEpisodes(tasks, settings) {
         const requestedLimit = Number(settings.maxSyncIterations);
         const maximumIterations = Number.isInteger(requestedLimit) && requestedLimit > 0 ?
             Math.min(64, requestedLimit) : 64;
@@ -725,24 +744,29 @@
         const largeBacklogThreshold = Math.max(1, Number(settings.largeBacklogThreshold) || 30);
         const hasExternalFloor = Boolean(settings.resourceNotBeforeSeconds) ||
             (Array.isArray(settings.fixedReservations) && settings.fixedReservations.length > 0);
+        const resourceDuration = new Map();
+        for (const task of tasks) {
+            const key = `${task._episode}\u0000${task._recipe.resource}`;
+            resourceDuration.set(key, Math.max(resourceDuration.get(key) || 0, task._recipe.durationSeconds));
+        }
 
         for (; iterations < maximumIterations; iterations += 1) {
             scheduled = scheduleResources(tasks, settings);
-            const tableTargets = new Map();
+            const episodeTargets = new Map();
             const resourceTargets = new Map();
             const scheduledByInput = new Map();
 
             for (const task of scheduled) {
                 scheduledByInput.set(task._inputIndex, task);
-                tableTargets.set(
-                    task._table,
+                episodeTargets.set(
+                    task._episode,
                     Math.max(
-                        tableTargets.get(task._table) || 0,
-                        tableTargetFinishSeconds(settings, task._table),
+                        episodeTargets.get(task._episode) || 0,
+                        episodeTargetFinishSeconds(settings, task),
                         task.scheduleFinishSeconds
                     )
                 );
-                const groupKey = `${task._table}\u0000${task._recipe.resource}`;
+                const groupKey = `${task._episode}\u0000${task._recipe.resource}`;
                 resourceTargets.set(
                     groupKey,
                     Math.max(resourceTargets.get(groupKey) || 0, task.scheduleFinishSeconds)
@@ -750,8 +774,16 @@
             }
 
             const spread = synchronizationSpread(scheduled);
+            const requiredShift = task => {
+                const groupKey = `${task._episode}\u0000${task._recipe.resource}`;
+                const allowedLead = (1 - settings.syncAlignment) *
+                    (task._episodeCriticalSeconds - resourceDuration.get(groupKey));
+                return (episodeTargets.get(task._episode) || 0) - allowedLead -
+                    (resourceTargets.get(groupKey) || 0);
+            };
+            const maximumRequiredShift = Math.max(0, ...tasks.map(requiredShift));
             if (tasks.length >= largeBacklogThreshold &&
-                spread.maximum > 0 && spread.maximum <= syncToleranceSeconds) {
+                maximumRequiredShift > 0 && maximumRequiredShift <= syncToleranceSeconds) {
                 return {
                     scheduled,
                     iterations: iterations + 1,
@@ -765,9 +797,7 @@
 
             let changed = false;
             for (const task of tasks) {
-                const groupKey = `${task._table}\u0000${task._recipe.resource}`;
-                const difference = (tableTargets.get(task._table) || 0) -
-                    (resourceTargets.get(groupKey) || 0);
+                const difference = requiredShift(task);
                 if (difference > 1e-9) {
                     const actualStartSeconds = scheduledByInput.get(task._inputIndex)
                         ?.scheduleStartSeconds ?? task._desiredStartSeconds;
@@ -827,13 +857,14 @@
                 exact: true,
                 score: 0,
                 evaluatedTransitions: 0,
-                model: "resource-slot-v3",
+                model: "resource-slot-v4",
                 syncSpreadSeconds: 0,
                 syncSpreadByTable: {},
+                syncSpreadByOrder: {},
                 assumptions: {
                     ...DEFAULTS,
                     ...options,
-                    tablePriorityPolicy: "oldest-table-first-across-resources",
+                    episodePriorityPolicy: "due-slack-then-oldest-episode",
                     syncConverged: true,
                     syncIterations: 0,
                     syncIterationLimit: 0,
@@ -844,9 +875,11 @@
         }
 
         const settings = { ...DEFAULTS, ...options };
+        settings.syncAlignment = Number.isFinite(Number(settings.syncAlignment)) ?
+            Math.max(0, Math.min(1, Number(settings.syncAlignment))) : DEFAULTS.syncAlignment;
         const nowMs = Number(options.nowMs) || Date.now();
         const tasks = prepare(items, nowMs, settings);
-        const synchronized = synchronizeTables(tasks, settings);
+        const synchronized = synchronizeEpisodes(tasks, settings);
         const scheduled = synchronized.scheduled;
 
         scheduled.sort((a, b) => {
@@ -865,16 +898,16 @@
             ...items[task._inputIndex],
             sequence: index + 1,
             recipe: { ...task._recipe },
-            scheduleStartSeconds: Math.round(task.scheduleStartSeconds),
-            scheduleFinishSeconds: Math.round(task.scheduleFinishSeconds),
+            scheduleStartSeconds: Math.round(task.scheduleStartSeconds * 1000) / 1000,
+            scheduleFinishSeconds: Math.round(task.scheduleFinishSeconds * 1000) / 1000,
             batchNumber: task.batchNumber,
             lane: task.lane,
-            ovenPassStartSeconds: task.ovenPassStartSeconds?.map(value => Math.round(value)),
-            passStartSeconds: task.ovenPassStartSeconds?.map(value => Math.round(value)),
+            ovenPassStartSeconds: task.ovenPassStartSeconds?.map(value => Math.round(value * 1000) / 1000),
+            passStartSeconds: task.ovenPassStartSeconds?.map(value => Math.round(value * 1000) / 1000),
             ovenPassLanes: task.ovenPassLanes ? [...task.ovenPassLanes] : undefined,
             ovenFeedEvents: task.ovenFeedEvents?.map(event => ({
                 ...event,
-                startSeconds: Math.round(event.startSeconds)
+                startSeconds: Math.round(event.startSeconds * 1000) / 1000
             })),
             slackSeconds: Math.round(task._slackSeconds)
         }));
@@ -887,24 +920,32 @@
             exact: synchronized.converged,
             score,
             evaluatedTransitions: tasks.length * synchronized.iterations,
-            model: "resource-slot-v3",
+            model: "resource-slot-v4",
             syncSpreadSeconds: Math.round(synchronized.spread.maximum),
             syncSpreadByTable: Object.fromEntries(
                 Object.entries(synchronized.spread.byTable)
                     .map(([table, spread]) => [table, Math.round(spread)])
             ),
+            syncSpreadByOrder: Object.fromEntries(
+                Object.entries(synchronized.spread.byEpisode)
+                    .map(([episode, spread]) => [episode.split("\u0000")[0], Math.round(spread)])
+            ),
             assumptions: {
                 targetWaitMinutes: settings.targetWaitMinutes,
+                syncAlignment: settings.syncAlignment,
                 upperFeedSeconds: settings.upperFeedSeconds,
                 lowerFeedSeconds: settings.lowerFeedSeconds,
                 ovenLanes: 2,
-                tablePriorityPolicy: "oldest-table-first-across-resources",
+                episodePriorityPolicy: "due-slack-then-oldest-episode",
                 syncConverged: synchronized.converged,
                 syncIterations: synchronized.iterations,
                 syncIterationLimit: synchronized.iterationLimit,
                 syncStopReason: synchronized.stopReason,
                 syncToleranceSeconds: synchronized.syncToleranceSeconds,
                 largeBacklogThreshold: Math.max(1, Number(settings.largeBacklogThreshold) || 30),
+                anchoredOrderCount: settings.episodeTargetFinishSeconds instanceof Map ?
+                    settings.episodeTargetFinishSeconds.size :
+                    Object.keys(settings.episodeTargetFinishSeconds || {}).length,
                 anchoredTableCount: settings.tableTargetFinishSeconds instanceof Map ?
                     settings.tableTargetFinishSeconds.size :
                     Object.keys(settings.tableTargetFinishSeconds || {}).length,
@@ -917,5 +958,5 @@
         };
     }
 
-    return { scheduleKitchenItems, resolveRecipe };
+    return { scheduleKitchenItems, resolveRecipe, episodeKey };
 });

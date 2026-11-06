@@ -197,20 +197,26 @@ function stampScheduleItems(items, baseAtMs) {
     }));
 }
 
-// 投入済み計画の占有枠と完成予定を再整理へ渡し、同じ設備への二重投入や同卓の完成ずれを抑える。
+// 投入済みの設備枠は固定し、完成予定の同期は同じ伝票へだけ引き継ぐ。
 function buildLockedPlanConstraints(lockedItems, nowMs) {
     const fixedReservations = [];
     const resourceNotBeforeSeconds = {};
-    const tableTargetFinishSeconds = {};
+    const episodeTargetFinishSeconds = {};
+    const episodeCriticalSeconds = {};
     const feedSecondsByResource = { OVEN_UPPER: 23, OVEN_LOWER: 43 };
 
     lockedItems.forEach(item => {
         const resource = item.recipe?.resource;
-        const table = String(item.table ?? "--");
-        tableTargetFinishSeconds[table] = Math.max(
-            tableTargetFinishSeconds[table] || 0,
-            (Number(item.scheduledFinishAtMs) - nowMs) / 1000 || 0
-        );
+        if (item.orderId != null) {
+            const episode = window.KitchenScheduler.episodeKey(item);
+            const remainingSeconds = (Number(item.scheduledFinishAtMs) - nowMs) / 1000;
+            if (Number.isFinite(remainingSeconds) && remainingSeconds > 0) {
+                episodeTargetFinishSeconds[episode] = Math.max(
+                    episodeTargetFinishSeconds[episode] || 0, remainingSeconds);
+                episodeCriticalSeconds[episode] = Math.max(
+                    episodeCriticalSeconds[episode] || 0, Number(item.recipe?.durationSeconds) || 0);
+            }
+        }
         const feedSeconds = feedSecondsByResource[resource];
         const events = Array.isArray(item.ovenFeedEvents) ? item.ovenFeedEvents : [];
 
@@ -248,10 +254,10 @@ function buildLockedPlanConstraints(lockedItems, nowMs) {
     Object.keys(resourceNotBeforeSeconds).forEach(resource => {
         resourceNotBeforeSeconds[resource] = Math.max(0, resourceNotBeforeSeconds[resource]);
     });
-    Object.keys(tableTargetFinishSeconds).forEach(table => {
-        tableTargetFinishSeconds[table] = Math.max(0, tableTargetFinishSeconds[table]);
+    Object.keys(episodeTargetFinishSeconds).forEach(episode => {
+        episodeTargetFinishSeconds[episode] = Math.max(0, episodeTargetFinishSeconds[episode]);
     });
-    return { fixedReservations, resourceNotBeforeSeconds, tableTargetFinishSeconds };
+    return { fixedReservations, resourceNotBeforeSeconds, episodeTargetFinishSeconds, episodeCriticalSeconds };
 }
 
 function planStartText(startAtMs, now = Date.now()) {
@@ -483,11 +489,12 @@ document.getElementById("organize-btn").addEventListener("click", () => {
         nowMs: now,
         fixedReservations: constraints.fixedReservations,
         resourceNotBeforeSeconds: constraints.resourceNotBeforeSeconds,
-        tableTargetFinishSeconds: constraints.tableTargetFinishSeconds
+        episodeTargetFinishSeconds: constraints.episodeTargetFinishSeconds,
+        episodeCriticalSeconds: constraints.episodeCriticalSeconds
     });
     organizedPlan = [...locked, ...stampScheduleItems(schedule.items, now)];
-    const syncNote = schedule.exact === false
-        ? `（同卓の完成差 最大${formatElapsed(schedule.syncSpreadSeconds || 0)}）`
+    const syncNote = schedule.syncSpreadSeconds > 0
+        ? `（同一伝票の完成差 最大${formatElapsed(schedule.syncSpreadSeconds)}）`
         : "";
     const hasUntimedManualSteps = getActiveItems().some(({ item }) =>
         item.workflowState === "PENDING" && item.recipe.hasUntimedManualSteps);
