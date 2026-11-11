@@ -10,6 +10,8 @@
         targetWaitMinutes: 12,
         firstBiteTargetMinutes: 6,
         syncAlignment: 0.7,
+        starterSyncAlignment: 0,
+        sideSyncAlignment: 0.9,
         // 1mの炉内を、搬送方向13cmの鉄板が隙間なく進む暫定値。
         // 実測後はここだけを変更すれば投入枠が再計算される。
         upperFeedSeconds: 23,
@@ -461,17 +463,22 @@
 
         return enriched.map(task => {
             const earlySnack = earlySnackByEpisode.get(task._episode) === task;
+            const hasStarter = earlySnackByEpisode.has(task._episode);
+            const isRiceSide = /^310[123]$/.test(normalizeCode(task));
+            const episodeSyncAlignment = hasStarter ?
+                (isRiceSide ? settings.sideSyncAlignment : settings.starterSyncAlignment) : settings.syncAlignment;
             const episodeCriticalSeconds = longestByEpisode.get(task._episode) || task._recipe.durationSeconds;
             const dueAtMs = task._createdAtMs + settings.targetWaitMinutes * 60000;
             const anchoredFinishSeconds = episodeTargetFinishSeconds(settings, task);
-            const allowedLeadSeconds = (1 - settings.syncAlignment) *
+            const allowedLeadSeconds = (1 - episodeSyncAlignment) *
                 (episodeCriticalSeconds - task._recipe.durationSeconds);
             const desiredStartSeconds = earlySnack ? 0 : Math.max(0, anchoredFinishSeconds > 0 ?
                 anchoredFinishSeconds - task._recipe.durationSeconds - allowedLeadSeconds :
-                settings.syncAlignment * (episodeCriticalSeconds - task._recipe.durationSeconds));
+                episodeSyncAlignment * (episodeCriticalSeconds - task._recipe.durationSeconds));
             return {
                 ...task,
                 _earlySnack: earlySnack,
+                _episodeSyncAlignment: episodeSyncAlignment,
                 _episodePriorityRank: episodePriority.get(task._episode),
                 _episodeCriticalSeconds: episodeCriticalSeconds,
                 _baseDesiredStartSeconds: desiredStartSeconds,
@@ -914,7 +921,7 @@
             const requiredShift = task => {
                 if (task._earlySnack) return 0;
                 const groupKey = `${task._episode}\u0000${task._recipe.resource}`;
-                const allowedLead = (1 - settings.syncAlignment) *
+                const allowedLead = (1 - task._episodeSyncAlignment) *
                     (task._episodeCriticalSeconds - resourceDuration.get(groupKey));
                 return (episodeTargets.get(task._episode) || 0) - allowedLead -
                     (resourceTargets.get(groupKey) || 0);
@@ -987,6 +994,17 @@
         };
     }
 
+    function completionBoundsByEpisode(scheduled) {
+        const bounds = new Map();
+        for (const task of scheduled) {
+            const current = bounds.get(task._episode) || { first: Infinity, last: 0 };
+            current.first = Math.min(current.first, task.scheduleFinishSeconds);
+            current.last = Math.max(current.last, task.scheduleFinishSeconds);
+            bounds.set(task._episode, current);
+        }
+        return bounds;
+    }
+
     // 外部へ公開する計算入口。入力から作業予定と前提条件を返し、DBの注文や実際の調理状態は変更しない。
     function scheduleKitchenItems(items, options = {}) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -997,12 +1015,14 @@
                 evaluatedTransitions: 0,
                 model: "resource-slot-v5",
                 firstDishSecondsByOrder: {},
+                lastDishSecondsByOrder: {},
                 syncSpreadSeconds: 0,
                 syncSpreadByTable: {},
                 syncSpreadByOrder: {},
                 assumptions: {
                     ...DEFAULTS,
                     ...options,
+                    planPolicy: "aligned",
                     episodePriorityPolicy: "due-slack-then-oldest-episode",
                     syncConverged: true,
                     syncIterations: 0,
@@ -1018,9 +1038,39 @@
             Math.max(1, Number(settings.firstBiteTargetMinutes)) : DEFAULTS.firstBiteTargetMinutes;
         settings.syncAlignment = Number.isFinite(Number(settings.syncAlignment)) ?
             Math.max(0, Math.min(1, Number(settings.syncAlignment))) : DEFAULTS.syncAlignment;
+        settings.starterSyncAlignment = Number.isFinite(Number(settings.starterSyncAlignment)) ?
+            Math.max(0, Math.min(1, Number(settings.starterSyncAlignment))) : DEFAULTS.starterSyncAlignment;
+        settings.sideSyncAlignment = Number.isFinite(Number(settings.sideSyncAlignment)) ?
+            Math.max(0, Math.min(1, Number(settings.sideSyncAlignment))) : DEFAULTS.sideSyncAlignment;
         const nowMs = Number(options.nowMs) || Date.now();
         const tasks = prepare(items, nowMs, settings);
-        const synchronized = synchronizeEpisodes(tasks, settings);
+        let synchronized = synchronizeEpisodes(tasks, settings);
+        let evaluatedTransitions = tasks.length * synchronized.iterations;
+        let planPolicy = "aligned";
+        // 先出し案は、どの伝票の初品・全品完了も遅くしない場合だけ採用する。
+        if (tasks.some(task => task._earlySnack) &&
+            settings.starterSyncAlignment < settings.syncAlignment &&
+            options.starterSyncAlignment === undefined && options.sideSyncAlignment === undefined) {
+            const alignedSettings = {
+                ...settings,
+                starterSyncAlignment: settings.syncAlignment,
+                sideSyncAlignment: settings.syncAlignment
+            };
+            const alignedTasks = prepare(items, nowMs, alignedSettings);
+            const aligned = synchronizeEpisodes(alignedTasks, alignedSettings);
+            evaluatedTransitions += alignedTasks.length * aligned.iterations;
+            const fastBounds = completionBoundsByEpisode(synchronized.scheduled);
+            const alignedBounds = completionBoundsByEpisode(aligned.scheduled);
+            let improves = false;
+            const noRegression = synchronized.converged && [...alignedBounds].every(([episode, prior]) => {
+                const fast = fastBounds.get(episode);
+                if (!fast || fast.first > prior.first + 1e-9 || fast.last > prior.last + 1e-9) return false;
+                if (fast.first < prior.first - 1e-9 || fast.last < prior.last - 1e-9) improves = true;
+                return true;
+            });
+            if (noRegression && improves) planPolicy = "fast-starter";
+            else synchronized = aligned;
+        }
         const scheduled = synchronized.scheduled;
 
         scheduled.sort((a, b) => {
@@ -1041,6 +1091,7 @@
             recipe: { ...task._recipe },
             workPriority: task._workPriority,
             earlySnack: task._earlySnack,
+            episodeSyncAlignment: task._episodeSyncAlignment,
             scheduleStartSeconds: Math.round(task.scheduleStartSeconds * 1000) / 1000,
             scheduleFinishSeconds: Math.round(task.scheduleFinishSeconds * 1000) / 1000,
             batchNumber: task.batchNumber,
@@ -1058,6 +1109,7 @@
         const score = resultItems.reduce((sum, item) =>
             sum + Math.max(0, item.scheduleFinishSeconds - Math.max(0, item.slackSeconds)), 0);
         const firstDishSecondsByOrder = {};
+        const lastDishSecondsByOrder = {};
         for (const task of scheduled) {
             const orderId = String(task.orderId ?? `item-${task._inputIndex}`);
             const elapsedSeconds = Math.max(0, (nowMs - task._createdAtMs) / 1000);
@@ -1065,15 +1117,17 @@
             firstDishSecondsByOrder[orderId] = Math.min(
                 firstDishSecondsByOrder[orderId] ?? Number.POSITIVE_INFINITY, estimate
             );
+            lastDishSecondsByOrder[orderId] = Math.max(lastDishSecondsByOrder[orderId] ?? 0, estimate);
         }
 
         return {
             items: resultItems,
             exact: synchronized.converged,
             score,
-            evaluatedTransitions: tasks.length * synchronized.iterations,
+            evaluatedTransitions,
             model: "resource-slot-v5",
             firstDishSecondsByOrder,
+            lastDishSecondsByOrder,
             syncSpreadSeconds: Math.round(synchronized.spread.maximum),
             syncSpreadByTable: Object.fromEntries(
                 Object.entries(synchronized.spread.byTable)
@@ -1087,6 +1141,9 @@
                 targetWaitMinutes: settings.targetWaitMinutes,
                 firstBiteTargetMinutes: settings.firstBiteTargetMinutes,
                 syncAlignment: settings.syncAlignment,
+                starterSyncAlignment: settings.starterSyncAlignment,
+                sideSyncAlignment: settings.sideSyncAlignment,
+                planPolicy,
                 upperFeedSeconds: settings.upperFeedSeconds,
                 lowerFeedSeconds: settings.lowerFeedSeconds,
                 ovenLanes: 2,

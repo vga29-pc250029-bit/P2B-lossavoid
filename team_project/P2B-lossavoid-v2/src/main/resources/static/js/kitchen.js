@@ -670,25 +670,27 @@ function organizePendingItems() {
         episodeCriticalSeconds: constraints.episodeCriticalSeconds
     });
     organizedPlan = [...locked, ...stampScheduleItems(schedule.items, now)];
-    const syncNote = schedule.syncSpreadSeconds > 0
-        ? `（同一伝票の完成差 最大${formatElapsed(schedule.syncSpreadSeconds)}）`
-        : "";
     const hasUntimedManualSteps = getActiveItems().some(({ item }) =>
         item.workflowState === "PENDING" && item.recipe.hasUntimedManualSteps);
     const timingNote = hasUntimedManualSteps ? "（手作業時間は未計測）" : "";
     const firstDishByOrder = new Map();
+    const lastDishByOrder = new Map();
     for (const item of organizedPlan) {
         const elapsedSeconds = (Number(item.scheduledFinishAtMs) - Number(item.createdAtMs)) / 1000;
         if (!Number.isFinite(elapsedSeconds)) continue;
         const orderId = String(item.orderId);
         firstDishByOrder.set(orderId, Math.min(firstDishByOrder.get(orderId) ?? Infinity, elapsedSeconds));
+        lastDishByOrder.set(orderId, Math.max(lastDishByOrder.get(orderId) ?? 0, elapsedSeconds));
     }
+    const stageNote = firstDishByOrder.size
+        ? `（初品最短${formatElapsed(Math.min(...firstDishByOrder.values()))}・全品最長${formatElapsed(Math.max(...lastDishByOrder.values()))}）`
+        : "";
     const firstDishLateCount = [...firstDishByOrder.values()]
         .filter(seconds => seconds > schedule.assumptions.firstBiteTargetMinutes * 60).length;
     const firstDishNote = firstDishLateCount ? `（初品6分超過見込み ${firstDishLateCount}伝票）` : "";
     showMessage((locked.length
         ? `投入済み${locked.length}品を固定し、残り${schedulable.length}品を再整理しました`
-        : `${organizedPlan.length}品の作業順を更新しました`) + syncNote + firstDishNote + timingNote,
+        : `${organizedPlan.length}品の作業順を更新しました`) + stageNote + firstDishNote + timingNote,
     schedule.exact === false || hasUntimedManualSteps || firstDishLateCount ? "warning" : "info");
     organizedPlan.sort((a, b) =>
         (Number(a.scheduledStartAtMs) || 0) - (Number(b.scheduledStartAtMs) || 0) ||

@@ -124,8 +124,64 @@ test('table 03 order 201 displays the requested cooking order and offers hamon w
     assert.equal(hamon.scheduleStartSeconds, 0);
     assert.equal(hamon.scheduleFinishSeconds, 120);
     assert.equal(result.firstDishSecondsByOrder['201'], 120);
+    assert.equal(result.lastDishSecondsByOrder['201'], 390);
     assert.ok(result.firstDishSecondsByOrder['201'] <= 360);
     assert.equal(result.assumptions.firstBiteTargetMinutes, 6);
+    const byCode = code => result.items.find(value => value.code === code);
+    assert.equal(byCode('1307').scheduleFinishSeconds, 203);
+    assert.equal(byCode('2101').scheduleFinishSeconds, 330);
+    assert.equal(byCode('1401').scheduleFinishSeconds, 373);
+    assert.equal(byCode('2407').scheduleFinishSeconds, 390);
+    assert.equal(byCode('3102').scheduleFinishSeconds, 357);
+    assert.equal(Math.max(...result.items.map(value => value.scheduleFinishSeconds)), 390);
+    const previous = scheduleKitchenItems(input, {
+        nowMs: NOW, starterSyncAlignment: 0.7, sideSyncAlignment: 0.7
+    });
+    assert.equal(Math.max(...previous.items.map(value => value.scheduleFinishSeconds)), 415);
+    assert.equal(result.assumptions.starterSyncAlignment, 0);
+    assert.equal(result.assumptions.sideSyncAlignment, 0.9);
+    assert.equal(result.assumptions.planPolicy, 'fast-starter');
+});
+
+test('falls back to the aligned plan when an early starter would delay another ticket', () => {
+    const tickets = [
+        { id: '80', ageMinutes: 1, codes: ['1422', '2206', '1402'] },
+        { id: '81', ageMinutes: 5, codes: ['1422', '2101', '1402', '3102'] },
+        { id: '82', ageMinutes: 2, codes: ['1422', '2101', '2407', '3102'] },
+        { id: '83', ageMinutes: 2, codes: ['1422', '2418', '2110', '3102'] }
+    ];
+    let index = 0;
+    const input = tickets.flatMap((ticket, tableIndex) => ticket.codes.map(code => item({
+        orderId: ticket.id, itemId: String(index), itemIndex: index++,
+        table: String(tableIndex + 1).padStart(2, '0'),
+        createdAtMs: NOW - ticket.ageMinutes * 60000,
+        code,
+        cookTime: code === '1422' ? 2 : code === '3102' ? 1 : code === '2206' ? 3 : 6
+    })));
+    const aligned = scheduleKitchenItems(input, {
+        nowMs: NOW, starterSyncAlignment: 0.7, sideSyncAlignment: 0.7
+    });
+    const unguarded = scheduleKitchenItems(input, {
+        nowMs: NOW, starterSyncAlignment: 0, sideSyncAlignment: 0.9
+    });
+    const guarded = scheduleKitchenItems(input, { nowMs: NOW });
+    const latest = (plan, orderId) => Math.max(...plan.items
+        .filter(value => value.orderId === orderId).map(value => value.scheduleFinishSeconds));
+    assert.equal(latest(unguarded, '83') - latest(aligned, '83'), 43);
+    for (const ticket of tickets) {
+        assert.equal(latest(guarded, ticket.id), latest(aligned, ticket.id));
+        assert.equal(guarded.firstDishSecondsByOrder[ticket.id],
+            aligned.firstDishSecondsByOrder[ticket.id]);
+    }
+    assert.equal(guarded.assumptions.planPolicy, 'aligned');
+});
+
+test('a constrained station reports when the first dish cannot meet six minutes', () => {
+    const result = scheduleKitchenItems([
+        item({ orderId: 'late', itemId: 'hamon', code: '1422', cookTime: 2, createdAtMs: NOW }),
+        item({ orderId: 'late', itemId: 'doria', code: '2101', cookTime: 6, createdAtMs: NOW })
+    ], { nowMs: NOW, resourceNotBeforeSeconds: 400 });
+    assert.ok(result.firstDishSecondsByOrder.late > 360);
 });
 
 test('a locked completion anchors only its own ticket, not another order at the same table', () => {
@@ -518,6 +574,25 @@ test('keeps a complex quantity backlog within the KDS main-thread budget', () =>
         assert.ok(result.syncSpreadSeconds > 0);
         assert.match(result.assumptions.syncStopReason, /within-feed-tolerance|stagnated|iteration-limit/);
     }
+});
+
+test('compares starter plans for 120 pending dishes within the KDS main-thread budget', () => {
+    const codes = ['1422', '2101', '1401', '3102'];
+    const input = Array.from({ length: 30 }, (_, orderIndex) => codes.map((code, dishIndex) => item({
+        orderId: String(orderIndex),
+        itemId: String(orderIndex * codes.length + dishIndex),
+        itemIndex: orderIndex * codes.length + dishIndex,
+        table: String(orderIndex + 1).padStart(2, '0'),
+        createdAtMs: NOW - orderIndex * 5000,
+        code,
+        cookTime: code === '1422' ? 2 : code === '3102' ? 1 : 6
+    }))).flat();
+    const startedAt = performance.now();
+    const result = scheduleKitchenItems(input, { nowMs: NOW });
+    const elapsedMs = performance.now() - startedAt;
+    assert.equal(result.items.length, 120);
+    assert.ok(result.evaluatedTransitions >= 240);
+    assert.ok(elapsedMs < 500, `starter comparison blocked for ${elapsedMs.toFixed(1)}ms`);
 });
 
 test('allows a converging complex plan enough iterations to reach zero spread', () => {
