@@ -8,6 +8,7 @@
 
     const DEFAULTS = {
         targetWaitMinutes: 12,
+        firstBiteTargetMinutes: 6,
         syncAlignment: 0.7,
         // 1mの炉内を、搬送方向13cmの鉄板が隙間なく進む暫定値。
         // 実測後はここだけを変更すれば投入枠が再計算される。
@@ -357,12 +358,17 @@
         return STABLE_COLLATOR.compare(String(a ?? ""), String(b ?? ""));
     }
 
-    // 長時間の温製主菜を先に着手し、その間に前菜を仕上げる。
+    // 長い加熱を先に着手し、冷製のつまみは最初の一皿として別枠で早出しする。
     function workPriority(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
         const code = normalizeCode(item);
         if (DORIA_CODES.has(code)) return 0;
+        if (code === "1401") return 0.1;
+        if (code === "1402" || code === "1452") return 0.2;
         if (/^24\d{2}$/.test(code) && recipe.durationSeconds >= 300) return 0.5;
         if (/^12\d{2}$/.test(code)) return 1;
+        if (COLD_PLATES[code]) return 1.5;
+        if (code === "1307") return 2;
+        if (code === "1305") return 2.1;
         if (/^(13|14)\d{2}$/.test(code)) return 2;
         if (recipe.durationSeconds >= 300 && recipe.resource.startsWith("OVEN_")) return 0.5;
         return 3;
@@ -423,6 +429,16 @@
             );
         }
 
+        const earlySnackByEpisode = new Map();
+        for (const task of enriched) {
+            if (!COLD_PLATES[normalizeCode(task)] || longestByEpisode.get(task._episode) < 300 ||
+                task._recipe.durationSeconds > settings.firstBiteTargetMinutes * 60) continue;
+            const previous = earlySnackByEpisode.get(task._episode);
+            if (!previous || task._recipe.durationSeconds < previous._recipe.durationSeconds) {
+                earlySnackByEpisode.set(task._episode, task);
+            }
+        }
+
         // A common ticket order across resources prevents cross-oven priority cycles.
         const episodePriority = new Map(
             [...longestByEpisode.keys()]
@@ -444,16 +460,18 @@
         );
 
         return enriched.map(task => {
+            const earlySnack = earlySnackByEpisode.get(task._episode) === task;
             const episodeCriticalSeconds = longestByEpisode.get(task._episode) || task._recipe.durationSeconds;
             const dueAtMs = task._createdAtMs + settings.targetWaitMinutes * 60000;
             const anchoredFinishSeconds = episodeTargetFinishSeconds(settings, task);
             const allowedLeadSeconds = (1 - settings.syncAlignment) *
                 (episodeCriticalSeconds - task._recipe.durationSeconds);
-            const desiredStartSeconds = Math.max(0, anchoredFinishSeconds > 0 ?
+            const desiredStartSeconds = earlySnack ? 0 : Math.max(0, anchoredFinishSeconds > 0 ?
                 anchoredFinishSeconds - task._recipe.durationSeconds - allowedLeadSeconds :
                 settings.syncAlignment * (episodeCriticalSeconds - task._recipe.durationSeconds));
             return {
                 ...task,
+                _earlySnack: earlySnack,
                 _episodePriorityRank: episodePriority.get(task._episode),
                 _episodeCriticalSeconds: episodeCriticalSeconds,
                 _baseDesiredStartSeconds: desiredStartSeconds,
@@ -803,6 +821,7 @@
     function synchronizationSpread(scheduled) {
         const resourceFinishByEpisode = new Map();
         for (const task of scheduled) {
+            if (task._earlySnack) continue;
             if (!resourceFinishByEpisode.has(task._episode)) {
                 resourceFinishByEpisode.set(task._episode, { table: task._table, resources: new Map() });
             }
@@ -893,6 +912,7 @@
 
             const spread = synchronizationSpread(scheduled);
             const requiredShift = task => {
+                if (task._earlySnack) return 0;
                 const groupKey = `${task._episode}\u0000${task._recipe.resource}`;
                 const allowedLead = (1 - settings.syncAlignment) *
                     (task._episodeCriticalSeconds - resourceDuration.get(groupKey));
@@ -976,6 +996,7 @@
                 score: 0,
                 evaluatedTransitions: 0,
                 model: "resource-slot-v5",
+                firstDishSecondsByOrder: {},
                 syncSpreadSeconds: 0,
                 syncSpreadByTable: {},
                 syncSpreadByOrder: {},
@@ -993,6 +1014,8 @@
         }
 
         const settings = { ...DEFAULTS, ...options };
+        settings.firstBiteTargetMinutes = Number.isFinite(Number(settings.firstBiteTargetMinutes)) ?
+            Math.max(1, Number(settings.firstBiteTargetMinutes)) : DEFAULTS.firstBiteTargetMinutes;
         settings.syncAlignment = Number.isFinite(Number(settings.syncAlignment)) ?
             Math.max(0, Math.min(1, Number(settings.syncAlignment))) : DEFAULTS.syncAlignment;
         const nowMs = Number(options.nowMs) || Date.now();
@@ -1017,6 +1040,7 @@
             sequence: index + 1,
             recipe: { ...task._recipe },
             workPriority: task._workPriority,
+            earlySnack: task._earlySnack,
             scheduleStartSeconds: Math.round(task.scheduleStartSeconds * 1000) / 1000,
             scheduleFinishSeconds: Math.round(task.scheduleFinishSeconds * 1000) / 1000,
             batchNumber: task.batchNumber,
@@ -1033,6 +1057,15 @@
 
         const score = resultItems.reduce((sum, item) =>
             sum + Math.max(0, item.scheduleFinishSeconds - Math.max(0, item.slackSeconds)), 0);
+        const firstDishSecondsByOrder = {};
+        for (const task of scheduled) {
+            const orderId = String(task.orderId ?? `item-${task._inputIndex}`);
+            const elapsedSeconds = Math.max(0, (nowMs - task._createdAtMs) / 1000);
+            const estimate = Math.round(elapsedSeconds + task.scheduleFinishSeconds);
+            firstDishSecondsByOrder[orderId] = Math.min(
+                firstDishSecondsByOrder[orderId] ?? Number.POSITIVE_INFINITY, estimate
+            );
+        }
 
         return {
             items: resultItems,
@@ -1040,6 +1073,7 @@
             score,
             evaluatedTransitions: tasks.length * synchronized.iterations,
             model: "resource-slot-v5",
+            firstDishSecondsByOrder,
             syncSpreadSeconds: Math.round(synchronized.spread.maximum),
             syncSpreadByTable: Object.fromEntries(
                 Object.entries(synchronized.spread.byTable)
@@ -1051,6 +1085,7 @@
             ),
             assumptions: {
                 targetWaitMinutes: settings.targetWaitMinutes,
+                firstBiteTargetMinutes: settings.firstBiteTargetMinutes,
                 syncAlignment: settings.syncAlignment,
                 upperFeedSeconds: settings.upperFeedSeconds,
                 lowerFeedSeconds: settings.lowerFeedSeconds,

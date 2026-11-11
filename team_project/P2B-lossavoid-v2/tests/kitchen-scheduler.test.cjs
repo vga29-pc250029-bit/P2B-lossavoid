@@ -85,14 +85,18 @@ test('starts both dorias before the salad and keeps distinct tickets at one tabl
 
 test('classifies long hot mains before salad, 14xx appetizers, pizza and pasta', () => {
     assert.equal(workPriority(item({ code: '2110', menuCategory: 'doria', cookTime: 6 })), 0);
+    assert.equal(workPriority(item({ code: '1401', cookTime: 6 })), 0.1);
+    assert.equal(workPriority(item({ code: '1402', cookTime: 6 })), 0.2);
     assert.equal(workPriority(item({ code: '2418', menuCategory: 'meat', cookTime: 6 })), 0.5);
     assert.equal(workPriority(item({ code: '1209', menuCategory: 'appetizer', cookTime: 2 })), 1);
-    assert.equal(workPriority(item({ code: '1402', menuCategory: 'appetizer', cookTime: 6 })), 2);
+    assert.equal(workPriority(item({ code: '1422', menuCategory: 'appetizer', cookTime: 2 })), 1.5);
+    assert.equal(workPriority(item({ code: '1307', cookTime: 3 })), 2);
+    assert.equal(workPriority(item({ code: '1305', cookTime: 3 })), 2.1);
     assert.equal(workPriority(item({ code: '2206', menuCategory: 'pizza', cookTime: 3 })), 3);
     assert.equal(workPriority(item({ code: '2305', menuCategory: 'pasta', cookTime: 3 })), 3);
 });
 
-test('a doria and mixed grill take the lower-oven priority before 14xx appetizers', () => {
+test('a long-cook arrosticini starts ahead of the grill after the doria', () => {
     const result = scheduleKitchenItems([
         item({ orderId: 'A', itemId: 'arrosticini', code: '1402', cookTime: 6, menuCategory: 'appetizer' }),
         item({ orderId: 'B', itemId: 'pizza', code: '2206', cookTime: 3, menuCategory: 'pizza' }),
@@ -100,8 +104,28 @@ test('a doria and mixed grill take the lower-oven priority before 14xx appetizer
         item({ orderId: 'D', itemId: 'doria', code: '2110', cookTime: 6, menuCategory: 'doria' })
     ], { nowMs: NOW });
     const lower = result.items.filter(value => value.recipe.resource === 'OVEN_LOWER');
-    assert.deepEqual(lower.slice(0, 2).map(value => value.itemId), ['doria', 'grill']);
+    assert.deepEqual(lower.slice(0, 3).map(value => value.itemId), ['doria', 'arrosticini', 'grill']);
     assert.equal(result.items.find(value => value.recipe.resource === 'OVEN_UPPER').itemId, 'pizza');
+});
+
+test('table 03 order 201 displays the requested cooking order and offers hamon within six minutes', () => {
+    const codes = ['2101', '2101', '1401', '1402', '2407', '1422', '1307', '1305', '3102'];
+    const input = codes.map((code, index) => item({
+        orderId: '201', itemId: String(241 + index), itemIndex: index, table: '03',
+        createdAtMs: NOW, code, cookTime: code === '1422' ? 2 : code === '3102' ? 1 : 6
+    }));
+    const result = scheduleKitchenItems(input, { nowMs: NOW });
+    const displayOrder = [...result.items]
+        .sort((a, b) => a.workPriority - b.workPriority || a.itemIndex - b.itemIndex)
+        .map(value => value.code);
+    assert.deepEqual(displayOrder, codes);
+    const hamon = result.items.find(value => value.code === '1422');
+    assert.equal(hamon.earlySnack, true);
+    assert.equal(hamon.scheduleStartSeconds, 0);
+    assert.equal(hamon.scheduleFinishSeconds, 120);
+    assert.equal(result.firstDishSecondsByOrder['201'], 120);
+    assert.ok(result.firstDishSecondsByOrder['201'] <= 360);
+    assert.equal(result.assumptions.firstBiteTargetMinutes, 6);
 });
 
 test('a locked completion anchors only its own ticket, not another order at the same table', () => {

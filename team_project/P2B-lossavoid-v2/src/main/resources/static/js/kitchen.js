@@ -522,13 +522,14 @@ function planRowHtml(group, sequence, animate = false) {
             return `<span>${escapeHtml(unitLabel + passLabel + laneLabel)} <strong class="plan-feed-label" data-feed-at="${escapeHtml(event.scheduledAtMs || "")}">${escapeHtml(planStartText(Number(event.scheduledAtMs)))}</strong></span>`;
         }).join("")}</div>`
         : "";
+    const earlySnackNote = planItem.earlySnack ? "・先出し候補（初品6分目安）" : "";
     return `
         <article class="workflow-row planned-row${suspect ? " duplicate-suspect" : ""}${animate ? " workflow-enter" : ""}" data-item-id="${escapeHtml(current.item.id)}"
                  data-plan-start-at="${escapeHtml(planItem.scheduledStartAtMs || "")}">
             <button class="floor-pickup-button" type="button" disabled>フロア待機</button>
             <div class="workflow-main">
                 <div class="workflow-title"><span class="sequence-number">${escapeHtml(planItem.sequence)}</span>${escapeHtml(formatTableNo(current.order.table))}卓　${escapeHtml(group.qty)} ${escapeHtml(current.cookInfo.shortName || current.item.name)}</div>
-                <div class="workflow-meta"><strong class="plan-start-label">${escapeHtml(planStartText(Number(planItem.scheduledStartAtMs)))}</strong>・${escapeHtml(recipe.resourceLabel)}・${escapeHtml(ovenSlot)}</div>
+                <div class="workflow-meta"><strong class="plan-start-label">${escapeHtml(planStartText(Number(planItem.scheduledStartAtMs)))}</strong>・${escapeHtml(recipe.resourceLabel)}・${escapeHtml(ovenSlot)}${earlySnackNote}</div>
                 ${recipe.steps ? recipeStepsHtml(recipe, current.item.id, "plan") : `<div class="workflow-instruction">${escapeHtml(recipe.instruction)}</div>`}
                 ${feedHtml}
             </div>
@@ -675,10 +676,20 @@ function organizePendingItems() {
     const hasUntimedManualSteps = getActiveItems().some(({ item }) =>
         item.workflowState === "PENDING" && item.recipe.hasUntimedManualSteps);
     const timingNote = hasUntimedManualSteps ? "（手作業時間は未計測）" : "";
+    const firstDishByOrder = new Map();
+    for (const item of organizedPlan) {
+        const elapsedSeconds = (Number(item.scheduledFinishAtMs) - Number(item.createdAtMs)) / 1000;
+        if (!Number.isFinite(elapsedSeconds)) continue;
+        const orderId = String(item.orderId);
+        firstDishByOrder.set(orderId, Math.min(firstDishByOrder.get(orderId) ?? Infinity, elapsedSeconds));
+    }
+    const firstDishLateCount = [...firstDishByOrder.values()]
+        .filter(seconds => seconds > schedule.assumptions.firstBiteTargetMinutes * 60).length;
+    const firstDishNote = firstDishLateCount ? `（初品6分超過見込み ${firstDishLateCount}伝票）` : "";
     showMessage((locked.length
         ? `投入済み${locked.length}品を固定し、残り${schedulable.length}品を再整理しました`
-        : `${organizedPlan.length}品の作業順を更新しました`) + syncNote + timingNote,
-    schedule.exact === false || hasUntimedManualSteps ? "warning" : "info");
+        : `${organizedPlan.length}品の作業順を更新しました`) + syncNote + firstDishNote + timingNote,
+    schedule.exact === false || hasUntimedManualSteps || firstDishLateCount ? "warning" : "info");
     organizedPlan.sort((a, b) =>
         (Number(a.scheduledStartAtMs) || 0) - (Number(b.scheduledStartAtMs) || 0) ||
         Number(a.itemId) - Number(b.itemId));
