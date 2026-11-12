@@ -360,6 +360,15 @@
         return STABLE_COLLATOR.compare(String(a ?? ""), String(b ?? ""));
     }
 
+    function arrivalCompare(a, b) {
+        if (a._createdAtMs !== b._createdAtMs) return a._createdAtMs - b._createdAtMs;
+        const orderDiff = stableCompare(a.orderId, b.orderId);
+        if (orderDiff) return orderDiff;
+        const itemDiff = Number(a.itemIndex) - Number(b.itemIndex);
+        if (Number.isFinite(itemDiff) && itemDiff) return itemDiff;
+        return a._inputIndex - b._inputIndex;
+    }
+
     // 長い加熱を先に着手し、冷製のつまみは最初の一皿として別枠で早出しする。
     function workPriority(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
         const code = normalizeCode(item);
@@ -377,6 +386,7 @@
     }
 
     function priorityCompare(a, b) {
+        if (a._arrivalMode && b._arrivalMode) return arrivalCompare(a, b);
         const aOverdue = a._slackSeconds < 0 ? 0 : 1;
         const bOverdue = b._slackSeconds < 0 ? 0 : 1;
         if (aOverdue !== bOverdue) return aOverdue - bOverdue;
@@ -406,6 +416,7 @@
             return {
                 ...item,
                 _inputIndex: index,
+                _arrivalMode: settings.orderingStrategy === "arrival",
                 _recipe: recipe,
                 _workPriority: workPriority(item, recipe),
                 _createdAtMs: Number(item.createdAtMs) || nowMs,
@@ -490,6 +501,7 @@
     }
 
     function partnerCompare(seed, a, b) {
+        if (seed._arrivalMode) return arrivalCompare(a, b);
         const aSameEpisode = a._episode === seed._episode ? 0 : 1;
         const bSameEpisode = b._episode === seed._episode ? 0 : 1;
         if (aSameEpisode !== bSameEpisode) return aSameEpisode - bSameEpisode;
@@ -1042,13 +1054,32 @@
             Math.max(0, Math.min(1, Number(settings.starterSyncAlignment))) : DEFAULTS.starterSyncAlignment;
         settings.sideSyncAlignment = Number.isFinite(Number(settings.sideSyncAlignment)) ?
             Math.max(0, Math.min(1, Number(settings.sideSyncAlignment))) : DEFAULTS.sideSyncAlignment;
+        settings.orderingStrategy = settings.orderingStrategy === "arrival" ? "arrival" : "optimized";
         const nowMs = Number(options.nowMs) || Date.now();
         const tasks = prepare(items, nowMs, settings);
-        let synchronized = synchronizeEpisodes(tasks, settings);
-        let evaluatedTransitions = tasks.length * synchronized.iterations;
-        let planPolicy = "aligned";
+        let synchronized;
+        let evaluatedTransitions;
+        let planPolicy;
+        if (settings.orderingStrategy === "arrival") {
+            for (const task of tasks) {
+                task._desiredStartSeconds = 0;
+                task._earlySnack = false;
+            }
+            const scheduled = scheduleResources(tasks, settings);
+            synchronized = {
+                scheduled, iterations: 1, iterationLimit: 1, converged: true,
+                stopReason: "not-applicable", spread: synchronizationSpread(scheduled),
+                syncToleranceSeconds: 0
+            };
+            evaluatedTransitions = tasks.length;
+            planPolicy = "arrival";
+        } else {
+            synchronized = synchronizeEpisodes(tasks, settings);
+            evaluatedTransitions = tasks.length * synchronized.iterations;
+            planPolicy = "aligned";
+        }
         // 先出し案は、どの伝票の初品・全品完了も遅くしない場合だけ採用する。
-        if (tasks.some(task => task._earlySnack) &&
+        if (settings.orderingStrategy !== "arrival" && tasks.some(task => task._earlySnack) &&
             settings.starterSyncAlignment < settings.syncAlignment &&
             options.starterSyncAlignment === undefined && options.sideSyncAlignment === undefined) {
             const alignedSettings = {
@@ -1074,6 +1105,7 @@
         const scheduled = synchronized.scheduled;
 
         scheduled.sort((a, b) => {
+            if (settings.orderingStrategy === "arrival") return arrivalCompare(a, b);
             if (a.scheduleStartSeconds !== b.scheduleStartSeconds) {
                 return a.scheduleStartSeconds - b.scheduleStartSeconds;
             }
@@ -1147,7 +1179,8 @@
                 upperFeedSeconds: settings.upperFeedSeconds,
                 lowerFeedSeconds: settings.lowerFeedSeconds,
                 ovenLanes: 2,
-                episodePriorityPolicy: "due-slack-then-oldest-episode",
+                episodePriorityPolicy: settings.orderingStrategy === "arrival" ?
+                    "arrival-order" : "due-slack-then-oldest-episode",
                 syncConverged: synchronized.converged,
                 syncIterations: synchronized.iterations,
                 syncIterationLimit: synchronized.iterationLimit,

@@ -8,15 +8,16 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>キッチンディスプレイ</title>
-    <link href="/css/kitchen.css" rel="stylesheet" th:href="@{/css/kitchen.css}"/>
+    <link href="/css/kitchen.css?v=kds-compare-1" rel="stylesheet" th:href="@{/css/kitchen.css(v='kds-compare-1')}"/>
 </head>
-<body class="kds-page" data-page="kitchen">
+<body class="kds-page" data-page="kitchen" th:attr="data-ordering-mode=${orderingMode},data-comparison-mode=${comparisonMode},data-comparison-tag=${comparisonTag}">
 <header class="header-bg kds-header">
     <div class="header-actions">
+        <span class="kds-compare-label" th:if="${comparisonMode}" th:text="${orderingMode == 'arrival' ? '受付順（並び替えなし）' : '最適化（並び替えあり）'}">比較モード</span>
         <!-- 元画面の未実装ボタンは、処理があるように見せず無効状態で残す。 -->
-        <button class="btn-yellow" id="news-btn" type="button" disabled title="速報機能は未実装です">速報</button>
+        <!--<button class="btn-yellow" id="news-btn" type="button" disabled title="速報機能は未実装です">速報</button> -->
         <button class="btn-yellow" id="completed-btn" type="button">提供済</button>
-        <button class="btn-yellow" id="shift-btn" type="button" disabled title="シフト確認機能は未実装です">シフト確認</button>
+        <!--<button class="btn-yellow" id="shift-btn" type="button" disabled title="シフト確認機能は未実装です">シフト確認</button> -->
     </div>
     <div class="header-status">
         <div class="pickup-alert hidden" id="pickup-alert" aria-live="assertive"></div>
@@ -28,6 +29,7 @@
         <span class="current-time" id="current-time">hh:mm:ss</span>
     </div>
 </header>
+<div class="kds-comparison-metrics" id="kds-comparison-metrics" th:if="${comparisonMode}" aria-live="polite"></div>
 <main class="kds-workspace">
     <section class="raw-panel" aria-label="受信伝票">
         <div id="orderContainer"></div>
@@ -78,7 +80,7 @@
 <!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
 <script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
 <script src="/js/kitchen-clock.js" th:src="@{/js/kitchen-clock.js}"></script>
-<script src="/kitchen-scheduler.js" th:src="@{/kitchen-scheduler.js}"></script>
-<script src="/js/kitchen.js" th:src="@{/js/kitchen.js}" type="module"></script>
+<script src="/kitchen-scheduler.js?v=kds-compare-1" th:src="@{/kitchen-scheduler.js(v='kds-compare-1')}"></script>
+<script src="/js/kitchen.js?v=kds-duplicate-once-1" th:src="@{/js/kitchen.js(v='kds-duplicate-once-1')}" type="module"></script>
 </body>
 </html>

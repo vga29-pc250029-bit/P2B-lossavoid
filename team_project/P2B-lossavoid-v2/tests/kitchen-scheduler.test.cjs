@@ -30,6 +30,23 @@ test('uses the real 330-second lower conveyor time instead of rounded six minute
     assert.equal(recipe.resourceLabel, '下段オーブン 5:30');
 });
 
+test('arrival-order comparison keeps ticket entry order while respecting oven feed capacity', () => {
+    const input = [
+        item({ orderId: '1', itemId: 'salad', itemIndex: 0, code: '1205', name: 'わかめのサラダ', station: 'heat' }),
+        item({ orderId: '1', itemId: 'doria', itemIndex: 1, code: '2101', name: 'ミラノ風ドリア', cookTime: 6 }),
+        item({ orderId: '2', itemId: 'second-salad', itemIndex: 0, code: '1205', name: 'わかめのサラダ', station: 'heat',
+            createdAtMs: NOW - 4 * 60000 }),
+        item({ orderId: '2', itemId: 'second-doria', itemIndex: 1, code: '2101', name: 'ミラノ風ドリア', cookTime: 6,
+            createdAtMs: NOW - 4 * 60000 })
+    ];
+    const result = scheduleKitchenItems(input, { nowMs: NOW, orderingStrategy: 'arrival' });
+    assert.equal(result.assumptions.planPolicy, 'arrival');
+    assert.deepEqual(result.items.map(value => value.itemId), ['salad', 'doria', 'second-salad', 'second-doria']);
+    assert.equal(result.items.find(value => value.itemId === 'doria').scheduleStartSeconds, 0);
+    assert.equal(result.items.find(value => value.itemId === 'second-doria').scheduleStartSeconds, 0);
+    assert.equal(result.exact, true);
+});
+
 test('loads two upper-oven pans side by side and advances the next pair after 23 seconds', () => {
     const input = [0, 1, 2].map(index => item({ itemId: String(index), orderId: String(index) }));
     const result = scheduleKitchenItems(input, { nowMs: NOW });

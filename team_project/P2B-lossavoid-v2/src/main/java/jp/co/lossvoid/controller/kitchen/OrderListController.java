@@ -7,6 +7,7 @@ import jp.co.lossvoid.service.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -17,12 +18,27 @@ import org.springframework.web.bind.annotation.*;
 @Controller
 public class OrderListController {
     private final OrderService orderService;
-    public OrderListController(OrderService orderService) {
+    private final String orderingMode;
+    private final boolean comparisonMode;
+    private final String comparisonTag;
+
+    public OrderListController(OrderService orderService,
+            @Value("${app.kitchen.ordering-mode:optimized}") String orderingMode,
+            @Value("${app.kitchen.comparison-mode:false}") boolean comparisonMode,
+            @Value("${app.kitchen.comparison-tag:}") String comparisonTag) {
         this.orderService = orderService;
+        this.orderingMode = "arrival".equals(orderingMode) ? "arrival" : "optimized";
+        this.comparisonMode = comparisonMode;
+        this.comparisonTag = comparisonTag;
     }
 
     @GetMapping({"/kitchen", "/kitchen.html"})
-    public String kitchen() { return "kitchen/kds"; }
+    public String kitchen(Model model) {
+        model.addAttribute("orderingMode", orderingMode);
+        model.addAttribute("comparisonMode", comparisonMode);
+        model.addAttribute("comparisonTag", comparisonTag);
+        return "kitchen/kds";
+    }
 
     @GetMapping("/api/kitchen/orders")
     @ResponseBody

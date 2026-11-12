@@ -51,6 +51,26 @@ button, select { font-family: inherit; }
 }
 
 .header-actions.right { justify-content: flex-end; gap: 20px; }
+.kds-compare-label {
+    display: inline-block;
+    max-width: 220px;
+    padding: 5px 9px;
+    border: 1px solid #333;
+    background: white;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.25;
+    text-align: center;
+}
+.kds-comparison-metrics {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-bottom: 1px solid #aaa;
+    background: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+}
 .header-status { min-width: 0; max-height: 50px; overflow-y: auto; text-align: center; font-size: 13px; }
 
 .btn-yellow {
@@ -450,6 +470,7 @@ button, select { font-family: inherit; }
     .kds-header { height: auto; grid-template-columns: 1fr; gap: 6px; }
     .header-actions,
     .header-actions.right { display: grid; gap: 8px; grid-template-columns: .75fr 1fr 1.45fr; }
+    .kds-compare-label { grid-column: 2 / 4; max-width: none; }
     .header-actions.right { grid-row: 2; grid-template-columns: 1fr 1fr auto; }
     .header-status { grid-row: 3; }
     .header-status:not(:has(> :not(.hidden))) { display: none; }
