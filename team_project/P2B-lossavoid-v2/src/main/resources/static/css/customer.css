@@ -41,13 +41,13 @@
         .btn-red:active { box-shadow: 0 1px #801010; transform: translateY(3px); }
         .btn-red:disabled { opacity: 0.4; box-shadow: none; }
         .btn-green {
-            background: linear-gradient(to bottom, #66bb6a, #43a047);
+            background: linear-gradient(to bottom, #ffae14, #ff890c);
             color: white;
             border-radius: 8px;
             padding: 10px 20px;
             font-weight: bold;
-            box-shadow: 0 4px #2e7d32;
-            border: 1px solid #2e7d32;
+            box-shadow: 0 4px #e16a00;
+            border: 1px solid #e16a00;
         }
         .btn-green:active { box-shadow: 0 1px #2e7d32; transform: translateY(3px); }
         .qty-btn {
