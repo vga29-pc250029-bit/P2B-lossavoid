@@ -11,7 +11,7 @@
             -webkit-tap-highlight-color: transparent;
         }
         .header-green {
-            background-color: #2d8c3c;
+            background-color: #ff7800;
             color: white;
             padding: 12px 16px;
             display: flex;
@@ -99,7 +99,7 @@
             position: relative;
         }
         .nav-btn i { font-size: 17px; }
-        .nav-btn.active { color: #2d8c3c; border-top-color: #2d8c3c; background-color: #f0f9f1; }
+        .nav-btn.active { color: #ff7800; border-top-color: #ff7800; background-color: #ff780012; }
 
         /* ---- Category tabs ---- */
         #category-tabs {
@@ -124,7 +124,7 @@
             border: none;
             white-space: nowrap;
         }
-        .cat-tab.active { background: #2d8c3c; color: white; }
+        .cat-tab.active { background: #ff7800; color: white; }
 
         /* ---- Search ---- */
         #search-wrap { padding: 8px 12px; background: white; flex-shrink: 0; border-bottom: 1px solid #eee; }
@@ -277,7 +277,7 @@
             z-index: 2;
             min-height: 52px;
             padding: 12px 52px;
-            background: #2d8c3c;
+            background: #ff7800;
             color: #fff;
             display: flex;
             align-items: center;
