@@ -60,7 +60,11 @@
             justify-content: center;
             font-size: 1.3rem;
             font-weight: bold;
+<<<<<<< HEAD
             color: #ffa700;
+=======
+            color: #ff7800;
+>>>>>>> 122610856537790159904ecc4c9d3a05694718d4
             background: white;
         }
         .qty-btn:active { background: #e8f5e9; }
