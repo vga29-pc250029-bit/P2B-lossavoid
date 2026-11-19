@@ -60,7 +60,7 @@
             justify-content: center;
             font-size: 1.3rem;
             font-weight: bold;
-            color: #2d8c3c;
+            color: #ffa700;
             background: white;
         }
         .qty-btn:active { background: #e8f5e9; }
@@ -146,7 +146,7 @@
         @media (min-width: 480px) { .menu-grid { grid-template-columns: repeat(3, 1fr); } }
         @media (min-width: 768px) { .menu-grid { grid-template-columns: repeat(4, 1fr); } }
         .menu-card {
-            background: #ffddaf;
+            background: #ffddaf50;
             border: 1px solid #e5e5e5;
             border-radius: 12px;
             padding: 10px;
@@ -299,7 +299,7 @@
         .info-modal-body { padding: 14px; }
         .info-photo {
             width: 100%;
-            aspect-ratio: 4/3;
+            aspect-ratio: 1;
             overflow: hidden;
             border: 1px solid #e1e7e2;
             border-radius: 6px;
@@ -308,7 +308,7 @@
             place-items: center;
             font-size: 64px;
         }
-        .info-photo img { width: 100%; height: 100%; object-fit: cover; }
+        .info-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
         .info-name-box { padding: 14px 4px 10px; font-size: 19px; font-weight: 900; color: #202620; }
         .info-allergy-box {
             border: 1px solid #f0c7c7;
@@ -316,11 +316,14 @@
             border-radius: 6px;
             background: #fff7f7;
             padding: 12px;
+            
+            /*アレルギー表示➀*/
+            display:none;
         }
         .info-allergy-title { color: #9d1717; font-size: 16px; font-weight: 900; margin-bottom: 7px; }
-        .info-allergy-value { color: #2d3330; font-size: 14px; font-weight: 700; line-height: 1.65; word-break: break-word; }
+        .info-allergy-value { color: #2d3330; font-size: 14px; font-weight: 700; line-height: 1.65; word-break: break-word;}
         .info-match-note { margin-top: 7px; color: #68716b; font-size: 11px; line-height: 1.45; }
-        .info-source-note { margin-top: 11px; color: #68716b; font-size: 11px; line-height: 1.55; }
+        .info-source-note { margin-top: 11px; color: #68716b; font-size: 11px; line-height: 1.55;   /*アレルギー表示➁*/display:none; }
         .info-source-note a { color: #237531; font-weight: 800; text-decoration: underline; }
 
         /* ---- Qty modal ---- */
@@ -374,9 +377,28 @@
         .cart-row .qty-ctrl .qty-btn { width: 2rem; height: 2rem; font-size: 1rem; }
 
         /* ---- History ---- */
+        .history-scroll { min-height: 0; }
+        .history-summary {
+            display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center;
+            justify-content: space-between; gap: 8px 16px;
+            padding: 12px 16px; border-top: 2px solid #2d8c3c;
+            background: #edf7ee; color: #184623;
+        }
+        .history-summary div { display: flex; flex-direction: column; min-width: 0; }
+        .history-summary strong { font-size: 15px; }
+        .history-summary span { font-size: 12px; color: #527059; }
+        .history-summary b { font-size: 21px; white-space: nowrap; }
         .history-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
         .history-card .h-time { font-size: 12px; color: #888; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
         .history-item-row { display: flex; justify-content: space-between; font-size: 13.5px; padding: 3px 0; }
+        .history-item-row span:first-child { min-width: 0; overflow-wrap: anywhere; }
+        .history-item-row span:last-child { flex-shrink: 0; padding-left: 10px; }
+        .history-ticket-total {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            margin-top: 8px; padding-top: 8px; border-top: 1px solid #e1e6e1;
+            font-size: 13px; color: #5a655c;
+        }
+        .history-ticket-total strong { color: #b71c1c; font-size: 15px; white-space: nowrap; }
 
         /* ---- Toast ---- */
         #toast {
@@ -391,4 +413,4 @@
         /* ---- Loading ---- */
         .spinner { width: 42px; height: 42px; border: 4px solid #e0ebe0; border-top-color: #2d8c3c; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-    
+

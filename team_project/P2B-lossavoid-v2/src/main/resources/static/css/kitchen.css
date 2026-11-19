@@ -71,6 +71,7 @@ button, select { font-family: inherit; }
     font-weight: 700;
     text-align: center;
 }
+
 .header-status { min-width: 0; max-height: 50px; overflow-y: auto; text-align: center; font-size: 13px; }
 
 .btn-yellow {
@@ -90,7 +91,7 @@ button, select { font-family: inherit; }
 .header-actions #news-btn { width: 94px; }
 .header-actions #completed-btn { width: 118px; }
 .header-actions #shift-btn { width: 170px; }
-.header-actions #delete-btn { width: 138px; }
+.header-actions #delete-btn { width: 138px; /*全消去*/display:none;}
 .header-actions #organize-btn { width: 114px; }
 
 .btn-yellow:not(:disabled):hover { filter: brightness(.96); }
@@ -232,6 +233,8 @@ button, select { font-family: inherit; }
     border-radius: 0;
     background: var(--ticket);
 }
+.order-card.system-order-card { border: 2px solid #216869; background: #e7f5f5; }
+.system-order-card .table-number { color: #174c4d; }
 
 .ticket-header {
     display: flex;
@@ -269,6 +272,8 @@ button, select { font-family: inherit; }
 }
 
 .raw-state.ready { color: white; background: var(--green); }
+.raw-state.system-request { color: #fff; background: #216869; }
+.raw-state.cooking { color: #3d2a00; background: #ffd43b; white-space: normal; }
 
 .workflow-section { margin-bottom: 14px; }
 .workflow-section h2 {
@@ -295,14 +300,53 @@ button, select { font-family: inherit; }
 }
 
 .workflow-row.duplicate-suspect { border-left: 4px solid #c92a2a; }
+.workflow-row.system-order-row { border: 2px solid #216869; background: #f1fbfb; }
+.chicken-bake-timer { font-weight: 900; }
 
 .ticket-enter { animation: ticket-in .24s ease-out both; }
 .workflow-enter { animation: workflow-in .22s ease-out both; }
 
 .workflow-main { min-width: 0; overflow-wrap: anywhere; }
+.workflow-order-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin-bottom: 5px;
+}
+.work-group-badge,
+.cooking-stage-badge {
+    min-height: 24px;
+    padding: 3px 7px;
+    border: 1px solid #495057;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 16px;
+}
+.work-group-badge { color: #fff; background: #2f5d50; }
+.cooking-stage-badge { color: #3d2b00; border-color: #d97706; background: #fff3bf; }
+.cooking-stage-badge.is-parallel { color: #124559; border-color: #168aad; background: #e7f5ff; }
 .workflow-title { font-size: 18px; font-weight: 900; }
+.workflow-qty {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 7px;
+    border: 1px solid #216869;
+    color: #174c4d;
+    background: #fff;
+    font-size: 13px;
+    vertical-align: middle;
+}
 .workflow-meta { margin-top: 3px; color: #354351; font-size: 13px; }
 .workflow-instruction { margin-top: 3px; color: #7c2d12; font-size: 12px; font-weight: 800; }
+.oven-handling-note {
+    margin-top: 4px;
+    padding-left: 7px;
+    border-left: 3px solid #c2410c;
+    color: #7c2d12;
+    font-size: 12px;
+    font-weight: 800;
+}
 
 .workflow-steps { min-width: 0; margin-top: 5px; font-size: 13px; line-height: 1.6; }
 .raw-item-row > .workflow-steps { grid-column: 1 / -1; margin-top: 0; }

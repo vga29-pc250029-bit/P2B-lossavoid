@@ -1,0 +1,79 @@
+[INFO] Scanning for projects...
+[INFO] Loaded 24531 auto-discovered prefixes for remote repository central (prefixes-central.txt)
+[INFO] 
+[INFO] ------------------< jp.co.lossvoid:P2B-lossavoid-v2 >-------------------
+[INFO] Building P2B-lossavoid-v2 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:4.1.1:run (default-cli) > test-compile @ P2B-lossavoid-v2 >>>
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ P2B-lossavoid-v2 ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 117 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ P2B-lossavoid-v2 ---
+[INFO] Loaded 64 auto-discovered prefixes for remote repository apache.snapshots (prefixes-apache.snapshots.txt)
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ P2B-lossavoid-v2 ---
+[INFO] skip non existing resourceDirectory C:\Users\cybor\Desktop\P2B-lossavoid\team_project\P2B-lossavoid-v2\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ P2B-lossavoid-v2 ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] <<< spring-boot:4.1.1:run (default-cli) < test-compile @ P2B-lossavoid-v2 <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:4.1.1:run (default-cli) @ P2B-lossavoid-v2 ---
+[INFO] Loaded 50 auto-discovered prefixes for remote repository ow2-snapshot (prefixes-ow2-snapshot.txt)
+[INFO] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.1)
+
+2026-11-18T14:48:49.318+09:00  INFO 26788 --- [  restartedMain] j.co.lossvoid.P2BLossavoidV2Application  : Starting P2BLossavoidV2Application using Java 17.0.16 with PID 26788 (C:\Users\cybor\Desktop\P2B-lossavoid\team_project\P2B-lossavoid-v2\target\classes started by cybor in C:\Users\cybor\Desktop\P2B-lossavoid\team_project\P2B-lossavoid-v2)
+2026-11-18T14:48:49.332+09:00  INFO 26788 --- [  restartedMain] j.co.lossvoid.P2BLossavoidV2Application  : No active profile set, falling back to 1 default profile: "default"
+2026-11-18T14:48:49.627+09:00  INFO 26788 --- [  restartedMain] o.s.b.devtools.restart.ChangeableUrls    : The Class-Path manifest attribute in C:\Users\cybor\.m2\repository\com\oracle\database\jdbc\ojdbc11\23.26.3.0.0\ojdbc11-23.26.3.0.0.jar referenced one or more files that do not exist: file:/C:/Users/cybor/.m2/repository/com/oracle/database/jdbc/ojdbc11/23.26.3.0.0/oraclepki.jar
+2026-11-18T14:48:49.629+09:00  INFO 26788 --- [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-11-18T14:48:49.631+09:00  INFO 26788 --- [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-11-18T14:48:55.094+09:00  INFO 26788 --- [  restartedMain] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-11-18T14:48:55.146+09:00  INFO 26788 --- [  restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-11-18T14:48:55.148+09:00  INFO 26788 --- [  restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-11-18T14:48:55.291+09:00  INFO 26788 --- [  restartedMain] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 5655 ms
+2026-11-18T14:48:55.534+09:00  WARN 26788 --- [  restartedMain] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'lossavoidSchemaInitializer' defined in file [C:\Users\cybor\Desktop\P2B-lossavoid\team_project\P2B-lossavoid-v2\target\classes\jp\co\lossvoid\config\LossavoidSchemaInitializer.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'jdbcTemplate' defined in class path resource [org/springframework/boot/jdbc/autoconfigure/JdbcTemplateConfiguration.class]: Failed to initialize dependency 'dataSourceScriptDatabaseInitializer' of JdbcTemplate bean 'jdbcTemplate': Error creating bean with name 'dataSourceScriptDatabaseInitializer' defined in class path resource [org/springframework/boot/jdbc/autoconfigure/DataSourceInitializationAutoConfiguration.class]: Unsatisfied dependency expressed through method 'dataSourceScriptDatabaseInitializer' parameter 0: Error creating bean with name 'dataSource' defined in class path resource [org/springframework/boot/jdbc/autoconfigure/DataSourceConfiguration$Hikari.class]: Failed to instantiate [com.zaxxer.hikari.HikariDataSource]: Factory method 'dataSource' threw exception with message: Failed to determine a suitable driver class
+2026-11-18T14:48:55.539+09:00  INFO 26788 --- [  restartedMain] o.apache.catalina.core.StandardService   : Stopping service [Tomcat]
+2026-11-18T14:48:55.833+09:00  INFO 26788 --- [  restartedMain] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-11-18T14:48:55.879+09:00 ERROR 26788 --- [  restartedMain] o.s.b.d.LoggingFailureAnalysisReporter   : 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Failed to configure a DataSource: 'url' attribute is not specified and no embedded datasource could be configured.
+
+Reason: Failed to determine a suitable driver class
+
+
+Action:
+
+Consider the following:
+	If you want an embedded database (H2, HSQL or Derby), please put it on the classpath.
+	If you have database settings to be loaded from a particular profile you may need to activate it (no profiles are currently active).
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  25.041 s
+[INFO] Finished at: 2026-11-18T14:48:56+09:00
+[INFO] ------------------------------------------------------------------------

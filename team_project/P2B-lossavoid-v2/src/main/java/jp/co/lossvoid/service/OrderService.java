@@ -7,7 +7,9 @@ import jp.co.lossvoid.form.StatusUpdateRequest;
 import jp.co.lossvoid.form.TableChangeRequest;
 import jp.co.lossvoid.repository.OrderRepository;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 注文の保存処理とKDSへの更新通知をつなぐ。DBの更新処理が戻ってから再取得の合図を送る。
@@ -16,15 +18,22 @@ import org.springframework.stereotype.Service;
 public class OrderService {
     private final OrderRepository orderRepository;
     private final KitchenUpdateBroadcaster kitchenUpdateBroadcaster;
+    private final ChickenPrepService chickenPrepService;
 
-    public OrderService(OrderRepository orderRepository, KitchenUpdateBroadcaster kitchenUpdateBroadcaster) {
+    public OrderService(OrderRepository orderRepository, KitchenUpdateBroadcaster kitchenUpdateBroadcaster,
+            ChickenPrepService chickenPrepService) {
         this.orderRepository = orderRepository;
         this.kitchenUpdateBroadcaster = kitchenUpdateBroadcaster;
+        this.chickenPrepService = chickenPrepService;
     }
 
+    @Transactional
     public OrderDto createOrder(OrderRequest request) {
         OrderDto order = orderRepository.create(request);
-        kitchenUpdateBroadcaster.notifyKitchen();
+        boolean chickenOrder = request.items().stream()
+            .anyMatch(item -> "2402".equals(item.code()) || "2404".equals(item.code()));
+        boolean prepChanged = chickenOrder && chickenPrepService.reconcile();
+        if (!prepChanged) kitchenUpdateBroadcaster.notifyKitchenAfterCommit();
         return order;
     }
 
@@ -32,7 +41,9 @@ public class OrderService {
         return orderRepository.findByTable(tableNo);
     }
 
+    @Transactional
     public List<OrderDto> getKitchenOrders() {
+        orderRepository.markFloorItemsKitchenReady();
         return orderRepository.findKitchenOrders();
     }
 
@@ -41,9 +52,15 @@ public class OrderService {
         kitchenUpdateBroadcaster.notifyKitchen();
     }
 
+    @Transactional
     public void updateItemStatus(Long orderItemId, StatusUpdateRequest request) {
         orderRepository.updateItemStatus(orderItemId, request);
-        kitchenUpdateBroadcaster.notifyKitchen();
+        String status = request.status().trim().toUpperCase(Locale.ROOT);
+        if ("KITCHEN_READY".equals(status) ||
+                (("DONE".equals(status) || "COMPLETED".equals(status)) && Boolean.TRUE.equals(request.served()))) {
+            chickenPrepService.consumeIfChicken(orderItemId);
+        }
+        kitchenUpdateBroadcaster.notifyKitchenAfterCommit();
     }
 
     public void cancelOrder(Long orderId) {

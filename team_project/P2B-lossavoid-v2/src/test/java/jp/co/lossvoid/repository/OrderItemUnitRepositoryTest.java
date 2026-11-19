@@ -35,6 +35,26 @@ class OrderItemUnitRepositoryTest {
     }
 
     @Test
+    void storesRiceAsKitchenReadyForFloorPickup() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(contains("SEQ_CUSTOMERS.NEXTVAL"), eq(Long.class))).thenReturn(7L);
+        when(jdbc.queryForObject(contains("SEQ_ORDERS.NEXTVAL"), eq(Long.class))).thenReturn(42L);
+        when(jdbc.queryForObject(contains("SEQ_ORDER_DETAILS.NEXTVAL"), eq(Long.class))).thenReturn(101L);
+        OrderRepository repository = spy(new OrderRepository(jdbc));
+        doReturn(new OrderDto(42L, "01", 2, "WAITING", "SELF", LocalDateTime.now(), List.of()))
+            .when(repository).findById(42L);
+
+        repository.create(new OrderRequest("01", 2, "SELF",
+            List.of(new OrderItemRequest("3101", "Rice", 150, 1, null))));
+
+        verify(jdbc).update(
+            argThat(sql -> sql.contains("INSERT INTO COOKING_TASKS")
+                && sql.contains("'KITCHEN_READY'")
+                && sql.contains("CURRENT_TIMESTAMP")),
+            eq(101L));
+    }
+
+    @Test
     void cancelsAServedUnitAndItsCookingTask() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(contains("SELECT d.QUANTITY"), eq(Integer.class), eq(42L), eq(7L))).thenReturn(1);

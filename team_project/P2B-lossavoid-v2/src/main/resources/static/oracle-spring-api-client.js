@@ -92,6 +92,17 @@ window.oracleApi = {
     getKitchenOrders() {
         return springApi("/kitchen/orders");
     },
+    getChickenPrep() {
+        return springApi("/kitchen/chicken-prep");
+    },
+    updateChickenPrep(batchId, action) {
+        if (!["start", "ready", "discard"].includes(action)) {
+            throw new Error("Unsupported chicken preparation action");
+        }
+        return springApi(`/kitchen/chicken-prep/${encodeURIComponent(batchId)}/${action}`, {
+            method: "PATCH"
+        });
+    },
     updateKitchenItem(orderItemId, status, served) {
         return springApi(`/kitchen/order-items/${orderItemId}`, {
             method: "PATCH",

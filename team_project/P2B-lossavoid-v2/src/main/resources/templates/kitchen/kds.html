@@ -8,7 +8,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>キッチンディスプレイ</title>
-    <link href="/css/kitchen.css?v=kds-compare-1" rel="stylesheet" th:href="@{/css/kitchen.css(v='kds-compare-1')}"/>
+    <link href="/css/kitchen.css?v=kds-work-wave-1" rel="stylesheet" th:href="@{/css/kitchen.css(v='kds-work-wave-1')}"/>
 </head>
 <body class="kds-page" data-page="kitchen" th:attr="data-ordering-mode=${orderingMode},data-comparison-mode=${comparisonMode},data-comparison-tag=${comparisonTag}">
 <header class="header-bg kds-header">
@@ -78,9 +78,9 @@
 </div>
 
 <!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
-<script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
+<script src="/oracle-spring-api-client.js?v=kds-chicken-2" th:src="@{/oracle-spring-api-client.js(v='kds-chicken-2')}"></script>
 <script src="/js/kitchen-clock.js" th:src="@{/js/kitchen-clock.js}"></script>
-<script src="/kitchen-scheduler.js?v=kds-compare-1" th:src="@{/kitchen-scheduler.js(v='kds-compare-1')}"></script>
-<script src="/js/kitchen.js?v=kds-duplicate-once-1" th:src="@{/js/kitchen.js(v='kds-duplicate-once-1')}" type="module"></script>
+<script src="/kitchen-scheduler.js?v=kds-sync-cap-1" th:src="@{/kitchen-scheduler.js(v='kds-sync-cap-1')}"></script>
+<script src="/js/kitchen.js?v=kds-sync-cap-1" th:src="@{/js/kitchen.js(v='kds-sync-cap-1')}" type="module"></script>
 </body>
 </html>

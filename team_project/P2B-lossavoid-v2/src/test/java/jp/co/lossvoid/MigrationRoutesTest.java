@@ -38,6 +38,7 @@ class MigrationRoutesTest {
     @MockitoBean StaffService staffService;
     @MockitoBean AllergyService allergyService;
     @MockitoBean KitchenUpdateBroadcaster kitchenUpdateBroadcaster;
+    @MockitoBean ChickenPrepService chickenPrepService;
 
     @Test
     void rendersTheSeparatedCustomerPages() throws Exception {
@@ -111,6 +112,21 @@ class MigrationRoutesTest {
                 "/kitchen/tasks", "/kitchen/cooking", "/kitchen/priority", "/kitchen/simulator")) {
             mvc.perform(get(path)).andExpect(status().isOk());
         }
+    }
+
+    @Test
+    void exposesSystemChickenBatchesSeparatelyFromCustomerOrders() throws Exception {
+        var summary = new ChickenPrepService.Summary(true, 6, 6, 4, 2, 0, 0, 0, 9, 60,
+            LocalDateTime.of(2026, 11, 12, 12, 0), List.of());
+        when(chickenPrepService.summary()).thenReturn(summary);
+        when(chickenPrepService.start(7L)).thenReturn(summary);
+        mvc.perform(get("/api/kitchen/chicken-prep"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.targetQty").value(6))
+            .andExpect(jsonPath("$.readyQty").value(4));
+        mvc.perform(patch("/api/kitchen/chicken-prep/7/start"))
+            .andExpect(status().isOk());
+        verify(chickenPrepService).start(7L);
     }
 
     @Test

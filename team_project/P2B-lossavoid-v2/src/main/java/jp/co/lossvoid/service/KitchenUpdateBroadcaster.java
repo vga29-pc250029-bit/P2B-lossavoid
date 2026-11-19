@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
@@ -38,5 +40,18 @@ public class KitchenUpdateBroadcaster {
                 emitters.remove(emitter);
             }
         }
+    }
+
+    public void notifyKitchenAfterCommit() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            notifyKitchen();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notifyKitchen();
+            }
+        });
     }
 }

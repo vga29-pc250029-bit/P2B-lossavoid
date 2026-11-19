@@ -12,11 +12,19 @@
         syncAlignment: 0.7,
         starterSyncAlignment: 0,
         sideSyncAlignment: 0.9,
+        // 同卓の完成合わせだけを理由に、短時間料理を長く待たせない。
+        // 設備枠・在庫・投入済み予約による実待機は、この上限とは別に反映する。
+        maxSynchronizationHoldSeconds: 20,
         // 1mの炉内を、搬送方向13cmの鉄板が隙間なく進む暫定値。
         // 実測後はここだけを変更すれば投入枠が再計算される。
         upperFeedSeconds: 23,
         lowerFeedSeconds: 43,
-        largeBacklogThreshold: 30
+        largeBacklogThreshold: 30,
+        workGroupMinTickets: 3,
+        workGroupMaxTickets: 5,
+        // 店舗教材の作業順を、同時刻表示だけでなく実際の着手順にも反映する。
+        // 各工程の食材準備は並行できるため、ウェーブ間は短い5秒間隔とする。
+        workWaveGapSeconds: 5
     };
 
     // 調理時間_タイムテーブル.xlsx の投入/取出し時刻。手作業は時間未計測。
@@ -73,6 +81,14 @@
         "1423": "ハモン・セラーヌとモッツァレラ2個を盛り、パセリをかける"
     };
     const DORIA_CODES = new Set(["2101", "2103", "2108", "2110", "2115"]);
+    const LONG_MEAT_CODES = new Set(["SYS_CHICKEN", "2402", "2404"]);
+    const LOWER_STARTER_CODES = new Set(["1401", "1402", "1452", "1405", "1410"]);
+    const LOWER_MEAT_CODES = new Set(["2418"]);
+    const UPPER_TWO_PASS_MEAT_CODES = new Set(["2403", "2406", "2407", "2417"]);
+    const UPPER_STARTER_CODES = new Set(["1305", "1307", "1404", "1407", "1416"]);
+    const PIZZA_BREAD_CODES = new Set([
+        "2203", "2204", "2206", "2208", "3110", "3111", "3112", "3114", "3214"
+    ]);
     const SALAD_TOPPINGS = new Map([["1202", "小エビ"], ["1205", "わかめ"], ["1209", "チキン"]]);
     const PHASE_LABELS = {
         PREP: "準備", TOPPING: "盛付", DRESSING: "ドレッシング", FINISH: "仕上げ",
@@ -81,13 +97,14 @@
 
     const RESOURCE_ORDER = {
         OVEN_LOWER: 0,
-        OVEN_UPPER: 1,
-        PASTA: 2,
-        HEAT: 3,
-        HOT_PLATING: 4,
-        COLD_PREP: 5,
-        FLOOR_PREP: 6,
-        OTHER: 7
+        OVEN_CHAIN: 1,
+        OVEN_UPPER: 2,
+        PASTA: 3,
+        HEAT: 4,
+        HOT_PLATING: 5,
+        COLD_PREP: 6,
+        FLOOR_PREP: 7,
+        OTHER: 8
     };
     const STABLE_COLLATOR = new Intl.Collator("ja", { numeric: true });
 
@@ -99,6 +116,16 @@
         return `${String(item.orderId ?? `item-${index}`)}\u0000${String(item.table ?? "--")}`;
     }
 
+    // 整理ボタンを押した瞬間に投入可能とはみなさず、食材・容器を準備する実作業分を確保する。
+    // 実測値が揃うまでは、工程の複雑さに応じて10〜20秒の範囲で扱う。
+    function preparationLeadSeconds(item, recipe) {
+        const code = normalizeCode(item);
+        if (code === "SYS_CHICKEN" || DORIA_CODES.has(code) || PIZZA_BREAD_CODES.has(code) ||
+            UPPER_TWO_PASS_MEAT_CODES.has(code) || code === "2418") return 20;
+        if (String(recipe.resource || "").startsWith("OVEN_")) return 15;
+        return 10;
+    }
+
     // 手作業の時間は未計測のまま保持し、機器の加熱時間や「0秒」と混同しない。
     function withSteps(recipe, definitions) {
         const steps = definitions.map((step, index) => ({
@@ -108,8 +135,13 @@
             durationSeconds: step.durationSeconds ?? null,
             dependsOn: step.dependsOn ? [...step.dependsOn] : (index === 0 ? [] : [definitions[index - 1].id])
         }));
+        const ovenHandling = String(recipe.resource || "").startsWith("OVEN_") ?
+            (Number(recipe.passes) > 1 ?
+                "入口直前から投入し、ジャストアウト後はすぐに盛付して再投入する。食材をオーブン側に寄せ、コンベア幅内に収める" :
+                "入口直前から投入する。食材をオーブン側に寄せ、コンベア幅内に収め、庫内へ押し込まない") : null;
         return {
             ...recipe,
+            handlingInstruction: recipe.handlingInstruction || ovenHandling,
             steps,
             hasUntimedManualSteps: steps.some(step => step.kind === "manual" && step.durationSeconds === null)
         };
@@ -172,6 +204,30 @@
     }
 
     function timetableOvenRecipe(code) {
+        if (code === "SYS_CHICKEN") {
+            return withSteps({
+                resource: "OVEN_CHAIN",
+                resourceLabel: "下段オーブン 6:00 → 上段オーブン 3:00（計9:00）",
+                durationSeconds: 540,
+                durationSource: "two-oven-equipment-chain",
+                trayUnits: 1,
+                passes: 2,
+                passOffsets: [0, 360],
+                passResources: ["OVEN_LOWER", "OVEN_UPPER"],
+                handlingInstruction: "下段で6分焼成後、取り出してすぐ上段へ移し、さらに3分焼成する。庫内へ押し込まない",
+                instruction: "下段投入 → 6分焼成 → 上段へ移動 → 3分焼成 → 焼成状態を確認"
+            }, [
+                { id: "prepare", phase: "PREP", instruction: "焼成チキンを焼成容器にのせる" },
+                { id: "lower-in", phase: "IN", instruction: "下段オーブンへ入れる" },
+                { id: "lower-heat", phase: "HEAT", instruction: "下段オーブンで1周加熱する", durationSeconds: 360 },
+                { id: "lower-out", phase: "OUT", instruction: "下段オーブンから取り出す" },
+                { id: "upper-in", phase: "IN", instruction: "取り出してすぐ上段オーブンへ入れる" },
+                { id: "upper-heat", phase: "HEAT", instruction: "上段オーブンで1周加熱する", durationSeconds: 180 },
+                { id: "upper-out", phase: "OUT", instruction: "上段オーブンから取り出す" },
+                { id: "finish", phase: "FINISH", instruction: "焼成状態を確認する" },
+                { id: "serve", phase: "SERVE", instruction: "焼成済み在庫へ補充する" }
+            ]);
+        }
         const entry = OVEN_TIMETABLE[code];
         if (!entry) return null;
         const lower = entry.resource === "OVEN_LOWER";
@@ -194,7 +250,8 @@
         }
         if (entry.finish) steps.push({ id: "finish", phase: "FINISH", instruction: entry.finish });
         steps.push({ id: "serve", phase: "SERVE", instruction: "提供する" });
-        const timeLabel = passes === 2 ? "3:00×2＋中間0:30" : (lower ? "5:30" : "3:00");
+        const singlePassLabel = `${Math.floor(entry.seconds / 60)}:${String(entry.seconds % 60).padStart(2, "0")}`;
+        const timeLabel = passes === 2 ? "3:00×2＋中間0:30" : singlePassLabel;
         return withSteps({
             resource: entry.resource,
             resourceLabel: `${ovenName}オーブン ${timeLabel}`,
@@ -369,20 +426,74 @@
         return a._inputIndex - b._inputIndex;
     }
 
-    // 長い加熱を先に着手し、冷製のつまみは最初の一皿として別枠で早出しする。
-    function workPriority(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
+    // 店舗教材の作業順。上下段は別設備として並行させ、同じ設備内ではこの順で投入する。
+    function cookingStage(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
         const code = normalizeCode(item);
-        if (DORIA_CODES.has(code)) return 0;
-        if (code === "1401") return 0.1;
-        if (code === "1402" || code === "1452") return 0.2;
-        if (/^24\d{2}$/.test(code) && recipe.durationSeconds >= 300) return 0.5;
-        if (/^12\d{2}$/.test(code)) return 1;
-        if (COLD_PLATES[code]) return 1.5;
-        if (code === "1307") return 2;
-        if (code === "1305") return 2.1;
-        if (/^(13|14)\d{2}$/.test(code)) return 2;
-        if (recipe.durationSeconds >= 300 && recipe.resource.startsWith("OVEN_")) return 0.5;
-        return 3;
+        if (LONG_MEAT_CODES.has(code)) return { sequence: 1, label: "時間のかかる肉料理" };
+        if (LOWER_STARTER_CODES.has(code)) return { sequence: 2, label: "下段の前菜" };
+        if (/^12\d{2}$/.test(code) || COLD_PLATES[code]) {
+            return { sequence: 2, label: "前菜（別設備で並行）" };
+        }
+        if (DORIA_CODES.has(code)) return { sequence: 3, label: "ドリア・グラタン" };
+        if (LOWER_MEAT_CODES.has(code)) return { sequence: 4, label: "下段の肉料理" };
+        if (UPPER_TWO_PASS_MEAT_CODES.has(code)) return { sequence: 5, label: "上段2周の肉料理" };
+        if (UPPER_STARTER_CODES.has(code)) return { sequence: 6, label: "スープ・上段の前菜" };
+        if (recipe.resource === "PASTA" || recipe.resource === "HEAT" || recipe.resource === "HOT_PLATING") {
+            return { sequence: 6, label: "麺・温製（別設備で並行）" };
+        }
+        if (PIZZA_BREAD_CODES.has(code)) return { sequence: 7, label: "ピザ・パン" };
+        if (/^24\d{2}$/.test(code) && recipe.resource === "OVEN_UPPER") {
+            return { sequence: 8, label: "上段1周の肉料理" };
+        }
+        return { sequence: 9, label: "その他" };
+    }
+
+    // 教材の8分類を、現場で順番に着手する6つの作業ウェーブへまとめる。
+    // 冷製前菜・麺・温製は専用設備で動かせるため、オーブンの順番を待たず並行作業とする。
+    function cookingWave(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
+        const code = normalizeCode(item);
+        const stage = cookingStage(item, recipe);
+        if (/^12\d{2}$/.test(code) || COLD_PLATES[code] ||
+            recipe.resource === "PASTA" || recipe.resource === "HEAT" || recipe.resource === "HOT_PLATING") {
+            return { sequence: 0, label: "別設備で並行", parallel: true };
+        }
+        if (stage.sequence === 1) return { sequence: 1, label: "時間のかかる肉料理", parallel: false };
+        if (stage.sequence === 2) return { sequence: 2, label: "下段の前菜", parallel: false };
+        if (stage.sequence === 3 || stage.sequence === 4) {
+            return { sequence: 3, label: "ドリア・グラタン／下段の肉料理", parallel: false };
+        }
+        if (stage.sequence === 5) return { sequence: 4, label: "上段2周の肉料理", parallel: false };
+        if (stage.sequence === 6) return { sequence: 5, label: "スープ／上段の前菜", parallel: false };
+        if (stage.sequence === 7 || stage.sequence === 8) {
+            return { sequence: 6, label: "ピザ・パン／上段1周の肉料理", parallel: false };
+        }
+        return { sequence: 0, label: "別設備で並行", parallel: true };
+    }
+
+    function workPriority(item, recipe = item.recipe?.resource ? item.recipe : resolveRecipe(item)) {
+        return cookingStage(item, recipe).sequence;
+    }
+
+    // 伝票を3〜5枚へ均等に区切る。6枚を5+1にせず3+3にすることで、孤立した伝票を作らない。
+    function assignWorkGroups(orderedEpisodes, minimum = 3, maximum = 5) {
+        const count = orderedEpisodes.length;
+        if (!count) return new Map();
+        const maxSize = Math.max(1, Math.floor(Number(maximum) || 5));
+        const minSize = Math.min(maxSize, Math.max(1, Math.floor(Number(minimum) || 3)));
+        let groupCount = Math.max(1, Math.ceil(count / maxSize));
+        while (groupCount > 1 && Math.floor(count / groupCount) < minSize) groupCount -= 1;
+        const baseSize = Math.floor(count / groupCount);
+        const largerGroupCount = count % groupCount;
+        const assignments = new Map();
+        let offset = 0;
+        for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+            const size = baseSize + (groupIndex < largerGroupCount ? 1 : 0);
+            orderedEpisodes.slice(offset, offset + size).forEach(episode => {
+                assignments.set(episode, { number: groupIndex + 1, ticketCount: size, totalGroups: groupCount });
+            });
+            offset += size;
+        }
+        return assignments;
     }
 
     function priorityCompare(a, b) {
@@ -390,7 +501,14 @@
         const aOverdue = a._slackSeconds < 0 ? 0 : 1;
         const bOverdue = b._slackSeconds < 0 ? 0 : 1;
         if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+        if (a._workGroupNumber !== b._workGroupNumber) {
+            return a._workGroupNumber - b._workGroupNumber;
+        }
         if (a._workPriority !== b._workPriority) return a._workPriority - b._workPriority;
+        if (a._priorityStrategy === "short-ticket" && b._priorityStrategy === "short-ticket" &&
+            a._recipe.resource === b._recipe.resource && a._ticketWorkSeconds !== b._ticketWorkSeconds) {
+            return a._ticketWorkSeconds - b._ticketWorkSeconds;
+        }
         if (a._episodePriorityRank !== b._episodePriorityRank) {
             return a._episodePriorityRank - b._episodePriorityRank;
         }
@@ -413,11 +531,13 @@
     function prepare(items, nowMs, settings) {
         const enriched = items.map((item, index) => {
             const recipe = resolveRecipe(item);
+            const prepLeadSeconds = preparationLeadSeconds(item, recipe);
             return {
                 ...item,
                 _inputIndex: index,
                 _arrivalMode: settings.orderingStrategy === "arrival",
                 _recipe: recipe,
+                _prepLeadSeconds: prepLeadSeconds,
                 _workPriority: workPriority(item, recipe),
                 _createdAtMs: Number(item.createdAtMs) || nowMs,
                 _table: String(item.table ?? "--"),
@@ -427,6 +547,7 @@
 
         const longestByEpisode = new Map();
         const oldestByEpisode = new Map();
+        const feedUnitsByEpisodeResource = new Map();
         for (const task of enriched) {
             const locked = settings.episodeCriticalSeconds instanceof Map ?
                 settings.episodeCriticalSeconds.get(task._episode) :
@@ -440,6 +561,14 @@
                 task._episode,
                 Math.min(oldestByEpisode.get(task._episode) ?? Number.POSITIVE_INFINITY, task._createdAtMs)
             );
+            if (task._recipe.resource.startsWith("OVEN_")) {
+                const key = `${task._episode}\u0000${task._recipe.resource}`;
+                const units = (task._recipe.passTrayUnits || [task._recipe.trayUnits || 1])
+                    .reduce((sum, value) => sum + value, 0);
+                feedUnitsByEpisodeResource.set(key,
+                    (feedUnitsByEpisodeResource.get(key) || 0) +
+                    Math.max(1, Math.ceil(Number(task.qty) || 1)) * units);
+            }
         }
 
         const earlySnackByEpisode = new Map();
@@ -453,9 +582,8 @@
         }
 
         // A common ticket order across resources prevents cross-oven priority cycles.
-        const episodePriority = new Map(
-            [...longestByEpisode.keys()]
-                .sort((a, b) => {
+        const orderedEpisodes = [...longestByEpisode.keys()]
+            .sort((a, b) => {
                     const aSlack = (oldestByEpisode.get(a) + settings.targetWaitMinutes * 60000 - nowMs) / 1000 -
                         longestByEpisode.get(a);
                     const bSlack = (oldestByEpisode.get(b) + settings.targetWaitMinutes * 60000 - nowMs) / 1000 -
@@ -468,11 +596,45 @@
                         return oldestByEpisode.get(a) - oldestByEpisode.get(b);
                     }
                     return stableCompare(a, b);
-                })
-                .map((episode, index) => [episode, index])
+                });
+        const episodePriority = new Map(orderedEpisodes.map((episode, index) => [episode, index]));
+        const workGroups = assignWorkGroups(
+            orderedEpisodes,
+            settings.workGroupMinTickets,
+            settings.workGroupMaxTickets
         );
 
+        // 各作業組に実在するウェーブだけを詰めて並べる。例えば1・3・6だけなら
+        // 1番目、2番目、3番目として開始し、存在しない工程の待ち時間は作らない。
+        const waveProfileByGroup = new Map();
+        for (const task of enriched) {
+            const workGroup = workGroups.get(task._episode) || { number: 1 };
+            const wave = cookingWave(task, task._recipe);
+            if (wave.parallel) continue;
+            if (!waveProfileByGroup.has(workGroup.number)) {
+                waveProfileByGroup.set(workGroup.number, { sequences: new Set(), prepLeadBySequence: new Map() });
+            }
+            const profile = waveProfileByGroup.get(workGroup.number);
+            profile.sequences.add(wave.sequence);
+            profile.prepLeadBySequence.set(wave.sequence,
+                Math.max(profile.prepLeadBySequence.get(wave.sequence) || 0, task._prepLeadSeconds));
+        }
+        for (const profile of waveProfileByGroup.values()) {
+            const sequences = [...profile.sequences].sort((a, b) => a - b);
+            profile.rankBySequence = new Map(sequences.map((sequence, index) => [sequence, index]));
+            profile.baseLeadSeconds = profile.prepLeadBySequence.get(sequences[0]) || 0;
+        }
+
         return enriched.map(task => {
+            const stage = cookingStage(task, task._recipe);
+            const wave = cookingWave(task, task._recipe);
+            const workGroup = workGroups.get(task._episode) || { number: 1, ticketCount: 1, totalGroups: 1 };
+            const waveProfile = waveProfileByGroup.get(workGroup.number);
+            const waveRank = wave.parallel ? 0 : (waveProfile?.rankBySequence.get(wave.sequence) ?? 0);
+            const waveLaunchSeconds = wave.parallel || settings.orderingStrategy === "arrival" ? task._prepLeadSeconds :
+                Math.max(task._prepLeadSeconds,
+                    (waveProfile?.baseLeadSeconds || task._prepLeadSeconds) +
+                        waveRank * settings.workWaveGapSeconds);
             const earlySnack = earlySnackByEpisode.get(task._episode) === task;
             const hasStarter = earlySnackByEpisode.has(task._episode);
             const isRiceSide = /^310[123]$/.test(normalizeCode(task));
@@ -483,17 +645,45 @@
             const anchoredFinishSeconds = episodeTargetFinishSeconds(settings, task);
             const allowedLeadSeconds = (1 - episodeSyncAlignment) *
                 (episodeCriticalSeconds - task._recipe.durationSeconds);
-            const desiredStartSeconds = earlySnack ? 0 : Math.max(0, anchoredFinishSeconds > 0 ?
-                anchoredFinishSeconds - task._recipe.durationSeconds - allowedLeadSeconds :
-                episodeSyncAlignment * (episodeCriticalSeconds - task._recipe.durationSeconds));
+            const itemNotBeforeSeconds = Math.max(0, Number(task.notBeforeSeconds) || 0);
+            const synchronizedStartSeconds = earlySnack ? task._prepLeadSeconds :
+                (anchoredFinishSeconds > 0 ?
+                    anchoredFinishSeconds - task._recipe.durationSeconds - allowedLeadSeconds :
+                    episodeSyncAlignment * (episodeCriticalSeconds - task._recipe.durationSeconds));
+            const maxSynchronizationStartSeconds = Math.max(
+                itemNotBeforeSeconds,
+                waveLaunchSeconds + settings.maxSynchronizationHoldSeconds
+            );
+            const desiredStartSeconds = Math.max(
+                itemNotBeforeSeconds,
+                waveLaunchSeconds,
+                Math.min(synchronizedStartSeconds, maxSynchronizationStartSeconds)
+            );
+            const feedSeconds = task._recipe.resource === "OVEN_LOWER" ?
+                settings.lowerFeedSeconds : settings.upperFeedSeconds;
+            const feedUnits = feedUnitsByEpisodeResource.get(
+                `${task._episode}\u0000${task._recipe.resource}`) || 1;
             return {
                 ...task,
                 _earlySnack: earlySnack,
+                _cookingStage: stage,
+                _cookingWave: wave,
+                _workWaveRank: waveRank,
+                _waveLaunchSeconds: waveLaunchSeconds,
+                _workGroupNumber: workGroup.number,
+                _workGroupTicketCount: workGroup.ticketCount,
+                _workGroupTotal: workGroup.totalGroups,
+                _priorityStrategy: settings.priorityStrategy,
+                _ticketWorkSeconds: task._recipe.durationSeconds +
+                    Math.ceil(Math.max(0, feedUnits - 2) / 2) * feedSeconds -
+                    Math.max(0, (nowMs - task._createdAtMs) / 1000) * settings.shortTicketAgeWeight,
                 _episodeSyncAlignment: episodeSyncAlignment,
                 _episodePriorityRank: episodePriority.get(task._episode),
                 _episodeCriticalSeconds: episodeCriticalSeconds,
+                _preparationLeadSeconds: task._prepLeadSeconds,
                 _baseDesiredStartSeconds: desiredStartSeconds,
                 _desiredStartSeconds: desiredStartSeconds,
+                _maxSynchronizationStartSeconds: maxSynchronizationStartSeconds,
                 _slackSeconds: (dueAtMs - nowMs) / 1000 - episodeCriticalSeconds,
                 _dueAtMs: dueAtMs
             };
@@ -816,6 +1006,141 @@
             }));
     }
 
+    function chainPassRecipe(recipe, resource, durationSeconds) {
+        return {
+            ...recipe,
+            resource,
+            durationSeconds,
+            passes: 1,
+            passOffsets: undefined,
+            passResources: undefined,
+            passTrayUnits: undefined,
+            trayUnits: 1
+        };
+    }
+
+    // 焼成チキンは下段6分の直後に上段3分へ移す。上段枠が詰まる場合は
+    // 下段の開始を遅らせ、オーブン間で待たせない投入時刻を反復して探す。
+    function scheduleOvenChain(chainTasks, lowerTasks, upperTasks, settings) {
+        const units = chainTasks.flatMap(task => {
+            const quantity = Math.max(1, Math.ceil(Number(task.qty) || 1));
+            return Array.from({ length: quantity }, (_, unitIndex) => ({
+                original: task,
+                unitIndex,
+                desiredStartSeconds: task._desiredStartSeconds,
+                key: `${task._inputIndex}:${unitIndex}`
+            }));
+        });
+        let lowerScheduled = [];
+        let upperScheduled = [];
+        let lowerByKey = new Map();
+        let upperByKey = new Map();
+
+        for (let iteration = 0; iteration < 64; iteration += 1) {
+            const lowerChainTasks = units.map(unit => ({
+                ...unit.original,
+                qty: 1,
+                _inputIndex: `chain-lower:${unit.key}`,
+                _chainKey: unit.key,
+                _chainUnitIndex: unit.unitIndex,
+                _desiredStartSeconds: unit.desiredStartSeconds,
+                _recipe: chainPassRecipe(unit.original._recipe, "OVEN_LOWER", 360)
+            }));
+            lowerScheduled = scheduleOven(
+                [...lowerTasks, ...lowerChainTasks],
+                "OVEN_LOWER",
+                settings.lowerFeedSeconds,
+                settings
+            );
+            lowerByKey = new Map(lowerScheduled
+                .filter(task => task._chainKey)
+                .map(task => [task._chainKey, task]));
+
+            const upperChainTasks = units.map(unit => {
+                const lower = lowerByKey.get(unit.key);
+                return {
+                    ...unit.original,
+                    qty: 1,
+                    _inputIndex: `chain-upper:${unit.key}`,
+                    _chainKey: unit.key,
+                    _chainUnitIndex: unit.unitIndex,
+                    _desiredStartSeconds: lower.scheduleStartSeconds + 360,
+                    _recipe: chainPassRecipe(unit.original._recipe, "OVEN_UPPER", 180)
+                };
+            });
+            upperScheduled = scheduleOven(
+                [...upperTasks, ...upperChainTasks],
+                "OVEN_UPPER",
+                settings.upperFeedSeconds,
+                settings
+            );
+            upperByKey = new Map(upperScheduled
+                .filter(task => task._chainKey)
+                .map(task => [task._chainKey, task]));
+
+            let shifted = false;
+            for (const unit of units) {
+                const lower = lowerByKey.get(unit.key);
+                const upper = upperByKey.get(unit.key);
+                const transferDelay = upper.scheduleStartSeconds - (lower.scheduleStartSeconds + 360);
+                if (transferDelay > 1e-9) {
+                    unit.desiredStartSeconds += transferDelay;
+                    shifted = true;
+                }
+            }
+            if (!shifted) break;
+            if (iteration === 63) {
+                throw new Error("焼成チキンの下段・上段連続枠を確保できませんでした");
+            }
+        }
+
+        const scheduledChain = chainTasks.map(original => {
+            const originalUnits = units.filter(unit => unit.original === original);
+            const events = originalUnits.flatMap(unit => {
+                const lower = lowerByKey.get(unit.key);
+                const upper = upperByKey.get(unit.key);
+                return [
+                    {
+                        startSeconds: lower.scheduleStartSeconds,
+                        pass: 1,
+                        unit: unit.unitIndex + 1,
+                        trayUnits: 1,
+                        lane: lower.lane,
+                        resource: "OVEN_LOWER"
+                    },
+                    {
+                        startSeconds: upper.scheduleStartSeconds,
+                        pass: 2,
+                        unit: unit.unitIndex + 1,
+                        trayUnits: 1,
+                        lane: upper.lane,
+                        resource: "OVEN_UPPER"
+                    }
+                ];
+            }).sort((a, b) => a.startSeconds - b.startSeconds || a.pass - b.pass || a.unit - b.unit);
+            const lowerStarts = events.filter(event => event.resource === "OVEN_LOWER")
+                .map(event => event.startSeconds);
+            const upperStarts = events.filter(event => event.resource === "OVEN_UPPER")
+                .map(event => event.startSeconds);
+            return {
+                ...original,
+                scheduleStartSeconds: Math.min(...lowerStarts),
+                scheduleFinishSeconds: Math.max(...upperStarts) + 180,
+                ovenPassStartSeconds: events.map(event => event.startSeconds),
+                ovenPassLanes: events.map(event => event.lane),
+                ovenFeedEvents: events,
+                lane: originalUnits.length === 1 ? events[0].lane : "複数",
+                batchNumber: lowerByKey.get(originalUnits[0].key).batchNumber
+            };
+        });
+
+        return {
+            lower: lowerScheduled.filter(task => !task._chainKey),
+            upper: upperScheduled.filter(task => !task._chainKey),
+            chain: scheduledChain
+        };
+    }
+
     function scheduleResources(tasks, settings) {
         const byResource = new Map();
         for (const task of tasks) {
@@ -825,6 +1150,19 @@
         }
 
         const scheduled = [];
+        const chainTasks = byResource.get("OVEN_CHAIN") || [];
+        if (chainTasks.length) {
+            const oven = scheduleOvenChain(
+                chainTasks,
+                byResource.get("OVEN_LOWER") || [],
+                byResource.get("OVEN_UPPER") || [],
+                settings
+            );
+            scheduled.push(...oven.lower, ...oven.upper, ...oven.chain);
+            byResource.delete("OVEN_CHAIN");
+            byResource.delete("OVEN_LOWER");
+            byResource.delete("OVEN_UPPER");
+        }
         for (const [resource, resourceTasks] of byResource) {
             if (resource === "OVEN_UPPER") {
                 scheduled.push(...scheduleOven(resourceTasks, resource, settings.upperFeedSeconds, settings));
@@ -932,6 +1270,7 @@
             const spread = synchronizationSpread(scheduled);
             const requiredShift = task => {
                 if (task._earlySnack) return 0;
+                if (task._desiredStartSeconds >= task._maxSynchronizationStartSeconds - 1e-9) return 0;
                 const groupKey = `${task._episode}\u0000${task._recipe.resource}`;
                 const allowedLead = (1 - task._episodeSyncAlignment) *
                     (task._episodeCriticalSeconds - resourceDuration.get(groupKey));
@@ -962,14 +1301,17 @@
                         previousActualStartByInput.get(task._inputIndex),
                         actualStartSeconds
                     );
-                    task._desiredStartSeconds += difference;
+                    task._desiredStartSeconds = Math.min(
+                        task._maxSynchronizationStartSeconds,
+                        task._desiredStartSeconds + difference
+                    );
                     if (actualDidNotMove && hasExternalFloor) {
                         // The wish is below a not-before/fixed-reservation floor.
                         // Jump from the actual feasible start after one observed
                         // plateau instead of inching forward for up to 43 loops.
-                        task._desiredStartSeconds = Math.max(
-                            task._desiredStartSeconds,
-                            actualStartSeconds + difference
+                        task._desiredStartSeconds = Math.min(
+                            task._maxSynchronizationStartSeconds,
+                            Math.max(task._desiredStartSeconds, actualStartSeconds + difference)
                         );
                     }
                     changed = true;
@@ -1017,6 +1359,66 @@
         return bounds;
     }
 
+    function planWaitMetrics(plan) {
+        const first = Object.values(plan.firstDishSecondsByOrder);
+        const last = Object.values(plan.lastDishSecondsByOrder).sort((a, b) => a - b);
+        const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+        return {
+            first: mean(first),
+            last: mean(last),
+            p95: last[Math.ceil(last.length * 0.95) - 1],
+            worst: last[last.length - 1]
+        };
+    }
+
+    // Compare schedules on the same pending orders. A faster average is accepted
+    // only when the first plate and the tail of the queue stay within guardrails.
+    function scheduleAdaptive(items, options) {
+        const arrivalBaseline = scheduleKitchenItems(items, {
+            ...options, orderingStrategy: "arrival", priorityStrategy: "legacy"
+        });
+        const candidates = [
+            { name: "training", options: { priorityStrategy: "legacy" } },
+            ...(items.length <= 120 ? [
+                { name: "training-short-0", options: { priorityStrategy: "short-ticket", shortTicketAgeWeight: 0,
+                    syncAlignment: 0, starterSyncAlignment: 0, sideSyncAlignment: 0 } }
+            ] : []),
+            { name: "training-short-0.5", options: { priorityStrategy: "short-ticket", shortTicketAgeWeight: 0.5,
+                syncAlignment: 0, starterSyncAlignment: 0, sideSyncAlignment: 0 } },
+            ...(items.length <= 120 ? [
+                { name: "training-short-1", options: { priorityStrategy: "short-ticket", shortTicketAgeWeight: 1,
+                    syncAlignment: 0, starterSyncAlignment: 0, sideSyncAlignment: 0 } }
+            ] : [])
+        ].map(candidate => {
+            const plan = scheduleKitchenItems(items, { ...options, ...candidate.options });
+            return { ...candidate, plan, metrics: planWaitMetrics(plan) };
+        });
+
+        const baseline = planWaitMetrics(arrivalBaseline);
+        const feasible = candidates.filter(({ metrics }) =>
+            metrics.last <= baseline.last + 1e-9 &&
+            metrics.first <= baseline.first + 120 &&
+            metrics.p95 <= baseline.p95 + 60 &&
+            metrics.worst <= baseline.worst + 120);
+        feasible.sort((a, b) =>
+            (a.metrics.last + 0.2 * a.metrics.first) -
+                (b.metrics.last + 0.2 * b.metrics.first) ||
+            a.metrics.first - b.metrics.first);
+        const selected = feasible[0] || candidates[0];
+        return {
+            ...selected.plan,
+            evaluatedTransitions: arrivalBaseline.evaluatedTransitions + candidates.reduce((sum, candidate) =>
+                sum + candidate.plan.evaluatedTransitions, 0),
+            assumptions: {
+                ...selected.plan.assumptions,
+                planPolicy: `adaptive-${selected.name}`,
+                adaptiveCandidates: candidates.length,
+                adaptiveMeanFirstSeconds: Math.round(selected.metrics.first),
+                adaptiveMeanLastSeconds: Math.round(selected.metrics.last)
+            }
+        };
+    }
+
     // 外部へ公開する計算入口。入力から作業予定と前提条件を返し、DBの注文や実際の調理状態は変更しない。
     function scheduleKitchenItems(items, options = {}) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -1025,7 +1427,7 @@
                 exact: true,
                 score: 0,
                 evaluatedTransitions: 0,
-                model: "resource-slot-v5",
+                model: "resource-slot-v7",
                 firstDishSecondsByOrder: {},
                 lastDishSecondsByOrder: {},
                 syncSpreadSeconds: 0,
@@ -1045,6 +1447,10 @@
             };
         }
 
+        if (options.priorityStrategy === "adaptive" && options.orderingStrategy !== "arrival") {
+            return scheduleAdaptive(items, options);
+        }
+
         const settings = { ...DEFAULTS, ...options };
         settings.firstBiteTargetMinutes = Number.isFinite(Number(settings.firstBiteTargetMinutes)) ?
             Math.max(1, Number(settings.firstBiteTargetMinutes)) : DEFAULTS.firstBiteTargetMinutes;
@@ -1054,7 +1460,20 @@
             Math.max(0, Math.min(1, Number(settings.starterSyncAlignment))) : DEFAULTS.starterSyncAlignment;
         settings.sideSyncAlignment = Number.isFinite(Number(settings.sideSyncAlignment)) ?
             Math.max(0, Math.min(1, Number(settings.sideSyncAlignment))) : DEFAULTS.sideSyncAlignment;
+        settings.maxSynchronizationHoldSeconds = Number.isFinite(Number(settings.maxSynchronizationHoldSeconds)) ?
+            Math.max(0, Math.min(60, Number(settings.maxSynchronizationHoldSeconds))) :
+            DEFAULTS.maxSynchronizationHoldSeconds;
         settings.orderingStrategy = settings.orderingStrategy === "arrival" ? "arrival" : "optimized";
+        settings.priorityStrategy = settings.priorityStrategy === "short-ticket" ? "short-ticket" : "legacy";
+        settings.shortTicketAgeWeight = Number.isFinite(Number(settings.shortTicketAgeWeight)) ?
+            Math.max(0, Math.min(2, Number(settings.shortTicketAgeWeight))) : 0;
+        settings.workGroupMinTickets = Math.max(1, Math.floor(Number(settings.workGroupMinTickets) || 3));
+        settings.workGroupMaxTickets = Math.max(
+            settings.workGroupMinTickets,
+            Math.floor(Number(settings.workGroupMaxTickets) || 5)
+        );
+        settings.workWaveGapSeconds = Number.isFinite(Number(settings.workWaveGapSeconds)) ?
+            Math.max(0, Math.min(30, Number(settings.workWaveGapSeconds))) : DEFAULTS.workWaveGapSeconds;
         const nowMs = Number(options.nowMs) || Date.now();
         const tasks = prepare(items, nowMs, settings);
         let synchronized;
@@ -1062,7 +1481,7 @@
         let planPolicy;
         if (settings.orderingStrategy === "arrival") {
             for (const task of tasks) {
-                task._desiredStartSeconds = 0;
+                task._desiredStartSeconds = task._prepLeadSeconds;
                 task._earlySnack = false;
             }
             const scheduled = scheduleResources(tasks, settings);
@@ -1122,7 +1541,15 @@
             sequence: index + 1,
             recipe: { ...task._recipe },
             workPriority: task._workPriority,
+            cookingStage: { ...task._cookingStage },
+            cookingWave: { ...task._cookingWave },
+            workWaveRank: task._workWaveRank,
+            waveLaunchSeconds: task._waveLaunchSeconds,
+            workGroupNumber: task._workGroupNumber,
+            workGroupTicketCount: task._workGroupTicketCount,
+            workGroupTotal: task._workGroupTotal,
             earlySnack: task._earlySnack,
+            preparationLeadSeconds: task._preparationLeadSeconds,
             episodeSyncAlignment: task._episodeSyncAlignment,
             scheduleStartSeconds: Math.round(task.scheduleStartSeconds * 1000) / 1000,
             scheduleFinishSeconds: Math.round(task.scheduleFinishSeconds * 1000) / 1000,
@@ -1157,7 +1584,7 @@
             exact: synchronized.converged,
             score,
             evaluatedTransitions,
-            model: "resource-slot-v5",
+            model: "resource-slot-v7",
             firstDishSecondsByOrder,
             lastDishSecondsByOrder,
             syncSpreadSeconds: Math.round(synchronized.spread.maximum),
@@ -1172,15 +1599,23 @@
             assumptions: {
                 targetWaitMinutes: settings.targetWaitMinutes,
                 firstBiteTargetMinutes: settings.firstBiteTargetMinutes,
+                priorityStrategy: settings.priorityStrategy,
+                shortTicketAgeWeight: settings.shortTicketAgeWeight,
                 syncAlignment: settings.syncAlignment,
                 starterSyncAlignment: settings.starterSyncAlignment,
                 sideSyncAlignment: settings.sideSyncAlignment,
+                maxSynchronizationHoldSeconds: settings.maxSynchronizationHoldSeconds,
                 planPolicy,
                 upperFeedSeconds: settings.upperFeedSeconds,
                 lowerFeedSeconds: settings.lowerFeedSeconds,
                 ovenLanes: 2,
+                workGroupMinTickets: settings.workGroupMinTickets,
+                workGroupMaxTickets: settings.workGroupMaxTickets,
+                workWaveGapSeconds: settings.workWaveGapSeconds,
+                workGroupCount: Math.max(...resultItems.map(item => Number(item.workGroupTotal) || 1)),
                 episodePriorityPolicy: settings.orderingStrategy === "arrival" ?
-                    "arrival-order" : "due-slack-then-oldest-episode",
+                    "arrival-order" : (settings.priorityStrategy === "short-ticket" ?
+                        "due-slack-then-short-ticket" : "due-slack-then-oldest-episode"),
                 syncConverged: synchronized.converged,
                 syncIterations: synchronized.iterations,
                 syncIterationLimit: synchronized.iterationLimit,
@@ -1202,5 +1637,8 @@
         };
     }
 
-    return { scheduleKitchenItems, resolveRecipe, episodeKey, workPriority };
+    return {
+        scheduleKitchenItems, resolveRecipe, episodeKey, workPriority,
+        cookingStage, cookingWave, assignWorkGroups
+    };
 });

@@ -8,7 +8,7 @@ import jp.co.lossvoid.config.LossavoidSchemaInitializer;
 /**
  * Springの構成を読み込めることを確認する。スキーマ初期化はモックにして起動テストでDDLを実行しない。
  */
-@SpringBootTest
+@SpringBootTest(properties = {"app.chicken.auto.enabled=false", "app.chicken.schedule.enabled=false"})
 class P2BLossavoidV2ApplicationTests {
 	@MockitoBean
 	private LossavoidSchemaInitializer lossavoidSchemaInitializer;

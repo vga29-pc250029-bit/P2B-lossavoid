@@ -495,12 +495,20 @@ window.addEventListener('pagehide', saveCustomerState);
     }
 
     // ---- 注文履歴 ----
+    function historyLineTotal(item) {
+        const price = Number(item.price);
+        const qty = Number(item.qty);
+        return Number.isFinite(price) && Number.isFinite(qty) ? Math.max(0, price) * Math.max(0, qty) : 0;
+    }
+
     async function renderHistory() {
         if (!document.getElementById('orderContainer')) return;
         const container = document.getElementById('orderContainer');
         const emptyMsg = document.getElementById('history-empty');
+        const summary = document.getElementById('history-summary');
         container.innerHTML = '<div class="empty-result" role="status">注文履歴を読み込み中...</div>';
         emptyMsg.classList.add('hidden');
+        summary.classList.add('hidden');
         const requestedTable = tableNumber;
 
         try {
@@ -513,23 +521,26 @@ window.addEventListener('pagehide', saveCustomerState);
                 return;
             }
             orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-            orders.forEach(order => {
+            const ticketTotals = orders.map(order => (order.items || []).reduce(
+                (sum, item) => sum + historyLineTotal(item), 0));
+            const cumulativeTotal = ticketTotals.reduce((sum, total) => sum + total, 0);
+            const ticketsHtml = orders.map((order, index) => {
                 const createdAt = new Date(order.createdAt);
                 const time = Number.isNaN(createdAt.getTime()) ? '--:--' : createdAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
                 const count = parseGuestCount(order.guestCount);
-                let total = 0;
                 const rows = (order.items || []).map(item => {
-                    total += item.price * item.qty;
-                    return `<div class="history-item-row"><span>${escapeHtml(item.name)} × ${Number(item.qty)}</span><span>${item.price * item.qty}円</span></div>`;
+                    return `<div class="history-item-row"><span>${escapeHtml(item.name)} × ${Number(item.qty)}</span><span>${historyLineTotal(item).toLocaleString('ja-JP')}円</span></div>`;
                 }).join('');
-                container.innerHTML += `
-                <div class="history-card">
+                return `<div class="history-card">
                     <div class="h-time"><i class="fa-regular fa-clock"></i> ${time}${count === null ? '' : ` ・ ${count}名`}</div>
                     ${rows}
-                    <div class="text-right font-bold mt-2" style="color:#b71c1c;">合計 ${total}円</div>
+                    <div class="history-ticket-total"><span>この伝票の合計</span><strong>${ticketTotals[index].toLocaleString('ja-JP')}円</strong></div>
                 </div>`;
-            });
+            }).join('');
+            container.innerHTML = ticketsHtml;
+            document.getElementById('history-ticket-count').textContent = `${orders.length}件の合計`;
+            document.getElementById('history-total-amount').textContent = `${cumulativeTotal.toLocaleString('ja-JP')}円`;
+            summary.classList.remove('hidden');
         } catch (e) {
             if (requestedTable !== tableNumber) return;
             console.error(e);

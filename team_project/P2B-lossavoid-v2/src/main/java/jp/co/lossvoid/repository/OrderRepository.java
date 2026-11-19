@@ -10,6 +10,7 @@ import jp.co.lossvoid.form.TableChangeRequest;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Repository
 public class OrderRepository {
+    private static final Set<String> FLOOR_READY_MENU_CODES = Set.of("3101", "3102", "3103");
     private static final String ORDER_SELECT = """
         SELECT o.ORDER_ID, c.TABLE_NO, c.NUMBER_OF_PEOPLE AS GUEST_COUNT,
                o.ORDER_STATUS AS STATUS, o.ORDER_METHOD, o.ORDER_TIME AS CREATED_AT
@@ -48,10 +50,19 @@ public class OrderRepository {
                     INSERT INTO ORDER_DETAILS (ORDER_DETAIL_ID, ORDER_ID, MENU_ID, MENU_NAME, PRICE, QUANTITY, NOTE)
                     VALUES (?, ?, ?, ?, ?, 1, ?)
                     """, detailId, orderId, Long.parseLong(item.code()), item.name(), item.price(), item.note());
-                jdbcTemplate.update("""
-                    INSERT INTO COOKING_TASKS (TASK_ID, ORDER_DETAIL_ID, STATUS, PRIORITY_ORDER)
-                    VALUES (SEQ_COOKING_TASKS.NEXTVAL, ?, 'WAITING', 1)
-                    """, detailId);
+                if (FLOOR_READY_MENU_CODES.contains(item.code())) {
+                    // ライスは調理工程を持たないため、注文時点からフロア持出し待ちにする。
+                    jdbcTemplate.update("""
+                        INSERT INTO COOKING_TASKS
+                            (TASK_ID, ORDER_DETAIL_ID, STATUS, PRIORITY_ORDER, END_TIME)
+                        VALUES (SEQ_COOKING_TASKS.NEXTVAL, ?, 'KITCHEN_READY', 1, CURRENT_TIMESTAMP)
+                        """, detailId);
+                } else {
+                    jdbcTemplate.update("""
+                        INSERT INTO COOKING_TASKS (TASK_ID, ORDER_DETAIL_ID, STATUS, PRIORITY_ORDER)
+                        VALUES (SEQ_COOKING_TASKS.NEXTVAL, ?, 'WAITING', 1)
+                        """, detailId);
+                }
             }
         }
         return findById(orderId);
@@ -69,6 +80,25 @@ public class OrderRepository {
             WHERE o.ORDER_STATUS NOT IN ('CLOSED', 'CANCELED')
             ORDER BY o.ORDER_TIME, o.ORDER_ID
             """, orderMapper());
+    }
+
+    /**
+     * 旧バージョンで未調理として登録されたライスを、フロア持出し待ちへ補正する。
+     */
+    public int markFloorItemsKitchenReady() {
+        return jdbcTemplate.update("""
+            UPDATE COOKING_TASKS
+            SET STATUS = 'KITCHEN_READY',
+                END_TIME = COALESCE(END_TIME, CURRENT_TIMESTAMP)
+            WHERE STATUS IN ('WAITING', 'COOKING')
+              AND EXISTS (
+                  SELECT 1
+                  FROM ORDER_DETAILS d
+                  WHERE d.ORDER_DETAIL_ID = COOKING_TASKS.ORDER_DETAIL_ID
+                    AND d.MENU_ID IN (3101, 3102, 3103)
+                    AND d.QUANTITY > 0
+              )
+            """);
     }
 
     public OrderDto findById(Long orderId) {

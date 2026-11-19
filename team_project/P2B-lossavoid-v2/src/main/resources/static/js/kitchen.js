@@ -7,10 +7,12 @@ const orderingMode = document.body.dataset.orderingMode === "arrival" ? "arrival
 const comparisonMode = document.body.dataset.comparisonMode === "true";
 const comparisonTag = comparisonMode ? document.body.dataset.comparisonTag || "" : "";
 const PLAN_STORAGE_KEY = comparisonMode || orderingMode === "arrival"
-    ? `lossavoid:kds:organized-plan:v4:${orderingMode}${comparisonMode ? ":comparison" : ""}`
-    : "lossavoid:kds:organized-plan:v4";
+    ? `lossavoid:kds:organized-plan:v8:${orderingMode}${comparisonMode ? ":comparison" : ""}`
+    : "lossavoid:kds:organized-plan:v8";
 const DUPLICATE_SEEN_KEY = "lossavoid:kds:duplicate-ack:v1";
+const SYSTEM_CHICKEN_CODE = "SYS_CHICKEN";
 let organizedPlan = [];
+let latestChickenSummary = null;
 let comparisonFingerprint = null;
 let possibleDuplicates = [];
 let unseenDuplicates = [];
@@ -108,7 +110,7 @@ function openDuplicateDialog(continueOrganize = false) {
 }
 
 function updateDuplicateWarnings() {
-    const kitchenOrders = latestOrders.map(order => ({
+    const kitchenOrders = latestOrders.filter(order => order.table !== "System").map(order => ({
         ...order,
         items: order.items.filter(item => isKitchenTarget(cookMap[String(item.code)]))
     }));
@@ -183,6 +185,16 @@ async function loadCookList() {
             cookTime: data.cookTime
         };
     });
+    cookMap[SYSTEM_CHICKEN_CODE] = {
+        code: SYSTEM_CHICKEN_CODE,
+        name: "焼成チキン",
+        shortName: "焼成チキン",
+        prepStation: "kitchen",
+        section: "kitchen",
+        cookTime: 9,
+        category: "meat",
+        systemChicken: true
+    };
 }
 
 function formatTableNo(table) {
@@ -295,6 +307,51 @@ function formatElapsed(totalSeconds) {
     return minutes > 0 ? `${minutes}分${String(rest).padStart(2, "0")}秒` : `${rest}秒`;
 }
 
+function updateChickenBakeTimers() {
+    const now = Date.now();
+    document.querySelectorAll(".chicken-bake-timer").forEach(label => {
+        const readyAt = Number(label.dataset.readyAt);
+        if (!Number.isFinite(readyAt) || readyAt <= 0) return;
+        label.textContent = now < readyAt ?
+            `完了予定 ${formatClock(readyAt, false)}（残り${formatElapsed((readyAt - now) / 1000)}）` :
+            "焼成時間経過・完了を登録してください";
+    });
+    document.querySelectorAll('button[data-action="chicken-ready"]').forEach(button => {
+        button.disabled = actionInFlight.has(`${button.dataset.itemId}:chicken-ready`) ||
+            Number(button.dataset.readyAt) > now;
+    });
+}
+
+function chickenPrepOrders(summary) {
+    if (comparisonMode || !summary) return [];
+    const bakeMinutes = Number(summary.bakeMinutes) || 9;
+    return (summary.batches || [])
+        .filter(batch => ["REQUESTED", "COOKING"].includes(String(batch.status)))
+        .map(batch => {
+            const status = String(batch.status);
+            const startedAtMs = parseTimestamp(batch.startedAt);
+            return {
+                id: `SYSTEM-CHICKEN-${batch.id}`,
+                table: "System",
+                orderMethod: "SYSTEM_CHICKEN",
+                createdAt: batch.requestedAt || summary.checkedAt || new Date().toISOString(),
+                items: [{
+                    id: `chicken-prep-${batch.id}`,
+                    code: SYSTEM_CHICKEN_CODE,
+                    name: "焼成チキン",
+                    qty: Math.max(1, Number(batch.requestedQty) || 1),
+                    price: 0,
+                    cookStatus: "WAITING",
+                    chickenBatchId: String(batch.id),
+                    chickenStatus: status,
+                    chickenStartedAtMs: startedAtMs,
+                    chickenReadyAtMs: startedAtMs ? startedAtMs + bakeMinutes * 60_000 : null,
+                    bakeMinutes
+                }]
+            };
+        });
+}
+
 function formatStartOffset(seconds) {
     const rounded = Math.max(0, Math.round(Number(seconds) || 0));
     return rounded <= 5 ? "今すぐ" : `＋${formatElapsed(rounded)}`;
@@ -354,23 +411,25 @@ function buildLockedPlanConstraints(lockedItems, nowMs) {
                     episodeCriticalSeconds[episode] || 0, Number(item.recipe?.durationSeconds) || 0);
             }
         }
-        const feedSeconds = feedSecondsByResource[resource];
         const events = Array.isArray(item.ovenFeedEvents) ? item.ovenFeedEvents : [];
 
-        if (feedSeconds && events.length) {
+        if (events.some(event => feedSecondsByResource[event.resource || resource])) {
             events.forEach(event => {
+                const eventResource = event.resource || resource;
+                const feedSeconds = feedSecondsByResource[eventResource];
+                if (!feedSeconds) return;
                 const eventAtMs = Number(event.scheduledAtMs);
                 if (!Number.isFinite(eventAtMs)) return;
                 const relativeSeconds = (eventAtMs - nowMs) / 1000;
                 if (relativeSeconds >= 0) {
                     fixedReservations.push({
-                        resource,
+                        resource: eventResource,
                         startSeconds: relativeSeconds,
                         trayUnits: Number(event.trayUnits) || 1
                     });
                 } else {
-                    resourceNotBeforeSeconds[resource] = Math.max(
-                        resourceNotBeforeSeconds[resource] || 0,
+                    resourceNotBeforeSeconds[eventResource] = Math.max(
+                        resourceNotBeforeSeconds[eventResource] || 0,
                         relativeSeconds + feedSeconds
                     );
                 }
@@ -404,7 +463,7 @@ function planStartText(startAtMs, now = Date.now()) {
         return `${formatClock(startAtMs)}投入（あと${formatElapsed(remainingSeconds)}）`;
     }
     if (remainingSeconds >= 0) return "今すぐ投入";
-    return `${formatClock(startAtMs)}投入予定（${formatElapsed(-remainingSeconds)}超過）`;
+    return `${formatClock(startAtMs)}投入後（${formatElapsed(-remainingSeconds)}経過）`;
 }
 
 function showMessage(text, tone = "info") {
@@ -418,10 +477,16 @@ function showMessage(text, tone = "info") {
 function rawItemHtml(group) {
     const { item, cookInfo } = group.entries[0];
     const ready = item.workflowState === "KITCHEN_READY";
+    const systemChicken = Boolean(item.chickenBatchId);
+    const chickenCooking = systemChicken && item.chickenStatus === "COOKING";
     const suspect = group.entries.some(entry => duplicateItemIds.has(String(entry.item.id)));
     const readyAt = ready ? Math.min(...group.entries.map(entry => entry.item.kitchenReadyAtMs || Date.now())) : null;
     const displayName = cookInfo.shortName || item.name;
-    const stateHtml = ready
+    const stateHtml = chickenCooking
+        ? `<span class="raw-state cooking">焼成中 <span class="chicken-bake-timer" data-ready-at="${escapeHtml(item.chickenReadyAtMs || "")}"></span></span>`
+        : systemChicken
+            ? `<span class="raw-state system-request">焼成待ち</span>`
+            : ready
         ? `<span class="raw-state ready"><span class="wait-elapsed">カウンター待ち</span></span>`
         : `<span class="raw-state">未調理</span>`;
     return `
@@ -441,7 +506,7 @@ function renderRawOrders() {
         const bReady = b.items.some(item => item.workflowState === "KITCHEN_READY") ? 0 : 1;
         if (aReady !== bReady) return aReady - bReady;
         const timeDiff = a.createdAt.toMillis() - b.createdAt.toMillis();
-        return timeDiff || Number(a.id) - Number(b.id);
+        return timeDiff || String(a.id).localeCompare(String(b.id), "ja", { numeric: true });
     });
 
     const cards = [];
@@ -455,9 +520,9 @@ function renderRawOrders() {
         if (!itemsHtml) return;
         const enterClass = seenRawOrderIds.has(String(order.id)) ? "" : " ticket-enter";
         cards.push(`
-            <article class="order-card bg-blue-light p-3${enterClass}">
+            <article class="order-card bg-blue-light p-3${order.table === "System" ? " system-order-card" : ""}${enterClass}">
                 <header class="ticket-header">
-                    <span class="table-number">${escapeHtml(formatTableNo(order.table))}卓</span>
+                    <span class="table-number">${escapeHtml(formatTableNo(order.table))}</span>
                     <span>${escapeHtml(formatClock(order.createdAt.toMillis(), false))}</span>
                 </header>
                 ${itemsHtml}
@@ -484,7 +549,7 @@ function counterRowHtml(group, animate = false) {
                 ${group.entries.length > 1 ? "1個持出し" : "持出し"} <span class="wait-elapsed">0秒</span>
             </button>
             <div class="workflow-main">
-                <div class="workflow-title">${escapeHtml(formatTableNo(order.table))}卓　${escapeHtml(group.qty)} ${escapeHtml(name)}</div>
+                <div class="workflow-title">${escapeHtml(formatTableNo(order.table))}　${escapeHtml(group.qty)} ${escapeHtml(name)}</div>
                 <div class="workflow-meta">${escapeHtml(item.recipe.resourceLabel)}・最初の完成 ${escapeHtml(formatClock(readyAt))}</div>
                 ${recipeStepsHtml(item.recipe, item.id, "counter")}
             </div>
@@ -513,7 +578,7 @@ function planRowHtml(group, sequence, animate = false) {
     // 保存済みの古い整理結果にも、最新の工程定義を表示する。予定時刻そのものは変えない。
     const recipe = current.item.recipe.steps ? current.item.recipe : (planItem.recipe || current.item.recipe);
     const feedEvents = Array.isArray(planItem.ovenFeedEvents) ? planItem.ovenFeedEvents : [];
-    const ovenSlot = recipe.resource === "OVEN_UPPER" || recipe.resource === "OVEN_LOWER"
+    const ovenSlot = ["OVEN_UPPER", "OVEN_LOWER", "OVEN_CHAIN"].includes(recipe.resource)
         ? (feedEvents.length > 1
             ? `${feedEvents.length}回の投入指示`
             : `第${planItem.batchNumber}投入・${planItem.lane === "左右" ? "左右2枚" : `レーン${planItem.lane}`}`)
@@ -523,45 +588,80 @@ function planRowHtml(group, sequence, animate = false) {
             const unitLabel = group.entries.length > 1 ? `${event.unit}品目・` :
                 (Number(current.item.qty) > 1 ? `${event.unit}枚目・` : "");
             const passLabel = Number(recipe.passes) > 1 ? `${event.pass}周目・` : "";
+            const ovenLabel = event.resource === "OVEN_LOWER" ? "下段・" :
+                (event.resource === "OVEN_UPPER" ? "上段・" : "");
             const laneLabel = event.lane === "左右" ? "左右2枚" : `レーン${event.lane}`;
-            return `<span>${escapeHtml(unitLabel + passLabel + laneLabel)} <strong class="plan-feed-label" data-feed-at="${escapeHtml(event.scheduledAtMs || "")}">${escapeHtml(planStartText(Number(event.scheduledAtMs)))}</strong></span>`;
+            return `<span>${escapeHtml(unitLabel + passLabel + ovenLabel + laneLabel)} <strong class="plan-feed-label" data-feed-at="${escapeHtml(event.scheduledAtMs || "")}">${escapeHtml(planStartText(Number(event.scheduledAtMs)))}</strong></span>`;
         }).join("")}</div>`
         : "";
     const earlySnackNote = planItem.earlySnack ? "・先出し候補（初品6分目安）" : "";
+    const stage = planItem.cookingStage || { sequence: planItem.workPriority || 9, label: "その他" };
+    const wave = planItem.cookingWave || window.KitchenScheduler.cookingWave(current.item, recipe);
+    const workGroupNumber = Number(planItem.workGroupNumber) || 1;
+    const workGroupTotal = Number(planItem.workGroupTotal) || 1;
+    const workGroupTicketCount = Number(planItem.workGroupTicketCount) || 1;
+    const handlingHtml = recipe.handlingInstruction ?
+        `<div class="oven-handling-note">${escapeHtml(recipe.handlingInstruction)}</div>` : "";
+    const systemChicken = Boolean(current.item.chickenBatchId);
+    const chickenCooking = systemChicken && current.item.chickenStatus === "COOKING";
+    const chickenAction = chickenCooking ? "chicken-ready" : "chicken-start";
+    const chickenReadyAt = Number(current.item.chickenReadyAtMs) || 0;
+    const chickenStartAt = Number(planItem.scheduledStartAtMs) || 0;
+    const chickenTimer = chickenCooking
+        ? `<span class="chicken-bake-timer" data-ready-at="${escapeHtml(chickenReadyAt)}"></span>`
+        : `準備待機 ${escapeHtml(planItem.preparationLeadSeconds || 10)}秒`;
+    const chickenStockReadyAt = Number(planItem.chickenStockReadyAtMs) || 0;
+    const chickenStockWait = !systemChicken && planItem.chickenStockWait && chickenStockReadyAt > Date.now();
+    const actionDisabled = (systemChicken && (chickenCooking ? chickenReadyAt > Date.now() : chickenStartAt > Date.now())) ||
+        chickenStockWait;
+    const chickenStockNote = chickenStockWait ?
+        `・焼成チキン完成待ち ${formatClock(chickenStockReadyAt, false)}以降` : "";
+    const dishName = current.cookInfo.shortName || current.item.name;
+    const titleHtml = systemChicken
+        ? `Sys @ 焼成チキン <span class="workflow-qty">${escapeHtml(group.qty)}枚</span>`
+        : `${escapeHtml(group.qty)} ${escapeHtml(dishName)}`;
     return `
-        <article class="workflow-row planned-row${suspect ? " duplicate-suspect" : ""}${animate ? " workflow-enter" : ""}" data-item-id="${escapeHtml(current.item.id)}"
-                 data-plan-start-at="${escapeHtml(planItem.scheduledStartAtMs || "")}">
-            <button class="floor-pickup-button" type="button" disabled>フロア待機</button>
+        <article class="workflow-row planned-row${systemChicken ? " system-order-row" : ""}${suspect ? " duplicate-suspect" : ""}${animate ? " workflow-enter" : ""}" data-item-id="${escapeHtml(current.item.id)}"
+                 data-plan-start-at="${escapeHtml(planItem.scheduledStartAtMs || "")}" data-work-group="${escapeHtml(workGroupNumber)}"
+                 data-cooking-wave="${escapeHtml(wave.sequence)}">
+            <button class="floor-pickup-button" type="button" disabled>${systemChicken ? "System指示" : "フロア待機"}</button>
             <div class="workflow-main">
-                <div class="workflow-title"><span class="sequence-number">${escapeHtml(planItem.sequence)}</span>${escapeHtml(formatTableNo(current.order.table))}卓　${escapeHtml(group.qty)} ${escapeHtml(current.cookInfo.shortName || current.item.name)}</div>
-                <div class="workflow-meta"><strong class="plan-start-label">${escapeHtml(planStartText(Number(planItem.scheduledStartAtMs)))}</strong>・${escapeHtml(recipe.resourceLabel)}・${escapeHtml(ovenSlot)}${earlySnackNote}</div>
+                <div class="workflow-order-context">
+                    <span class="work-group-badge">作業組 ${escapeHtml(workGroupNumber)}/${escapeHtml(workGroupTotal)}・${escapeHtml(workGroupTicketCount)}伝票</span>
+                    <span class="cooking-stage-badge${wave.parallel ? " is-parallel" : ""}"
+                          title="分類 ${escapeHtml(stage.sequence)} ${escapeHtml(stage.label)}">${wave.parallel ? "並行" : `投入 ${escapeHtml(wave.sequence)}/6`}　${escapeHtml(wave.label)}</span>
+                </div>
+                <div class="workflow-title"><span class="sequence-number">${escapeHtml(planItem.sequence)}</span>${titleHtml}</div>
+                <div class="workflow-meta"><strong class="plan-start-label">${escapeHtml(planStartText(Number(planItem.scheduledStartAtMs)))}</strong>・${escapeHtml(recipe.resourceLabel)}・${escapeHtml(ovenSlot)}${earlySnackNote}${systemChicken ? `・${chickenTimer}` : ""}${chickenStockNote}</div>
+                ${handlingHtml}
                 ${recipe.steps ? recipeStepsHtml(recipe, current.item.id, "plan") : `<div class="workflow-instruction">${escapeHtml(recipe.instruction)}</div>`}
                 ${feedHtml}
             </div>
             <button class="kitchen-ready-button" type="button"
-                    data-action="kitchen-ready" data-item-id="${escapeHtml(current.item.id)}">
-                ${group.entries.length > 1 ? "1個完了" : "調理完了"}
+                    data-action="${systemChicken ? chickenAction : "kitchen-ready"}" data-item-id="${escapeHtml(current.item.id)}"
+                    ${systemChicken ? `data-batch-id="${escapeHtml(current.item.chickenBatchId)}" data-ready-at="${escapeHtml(chickenReadyAt)}" data-start-at="${escapeHtml(chickenStartAt)}"` : ""}${chickenStockWait ? ` data-stock-ready-at="${escapeHtml(chickenStockReadyAt)}"` : ""}${actionDisabled ? " disabled" : ""}>
+                ${systemChicken && !chickenCooking ? "焼成開始" : (group.entries.length > 1 ? "1個完了" : "調理完了")}
             </button>
         </article>`;
 }
 
 function comparePlanGroups(a, b) {
-    // 表示は提供順の優先度、投入は各行の予定時刻で示す。空きレーンへの並行投入は妨げない。
+    // 実際の投入予定順を先に見せ、同時刻だけ料理の優先度で並べる。
     const first = group => group.entries[0];
     if (orderingMode === "arrival") {
         return Number(first(a).planItem.sequence) - Number(first(b).planItem.sequence);
     }
-    const priority = group => window.KitchenScheduler.workPriority(first(group).current.item);
-    const priorityDiff = priority(a) - priority(b);
-    if (priorityDiff) return priorityDiff;
     const startDiff = Number(first(a).planItem.scheduledStartAtMs) -
         Number(first(b).planItem.scheduledStartAtMs);
     if (startDiff) return startDiff;
+    const priority = group => window.KitchenScheduler.workPriority(first(group).current.item);
+    const priorityDiff = priority(a) - priority(b);
+    if (priorityDiff) return priorityDiff;
     const resourceRank = { OVEN_LOWER: 0, OVEN_UPPER: 1, PASTA: 2, COLD_PREP: 3 };
     const resourceDiff = (resourceRank[first(a).current.item.recipe.resource] ?? 4) -
         (resourceRank[first(b).current.item.recipe.resource] ?? 4);
     if (resourceDiff) return resourceDiff;
-    return Number(first(a).current.item.id) - Number(first(b).current.item.id);
+    return String(first(a).current.item.id).localeCompare(String(first(b).current.item.id), "ja", { numeric: true });
 }
 
 function renderOrganizedPanel() {
@@ -613,9 +713,10 @@ function renderOrganizedPanel() {
     updateWorkflowClocks();
 }
 
-function renderOrders(orders) {
-    latestOrders = (comparisonTag ? orders.filter(order => order.orderMethod === comparisonTag) : orders)
-        .map(normalizeOracleOrder);
+function renderOrders(orders, chickenSummary = null) {
+    latestChickenSummary = chickenSummary;
+    const customerOrders = comparisonTag ? orders.filter(order => order.orderMethod === comparisonTag) : orders;
+    latestOrders = [...customerOrders, ...chickenPrepOrders(chickenSummary)].map(normalizeOracleOrder);
     updateDuplicateWarnings();
     renderRawOrders();
     const fingerprint = getActiveItems()
@@ -634,9 +735,13 @@ async function refreshOrders() {
     if (ordersRefreshing) return;
     ordersRefreshing = true;
     try {
-        renderOrders(await window.oracleApi.getKitchenOrders());
+        const [orders, chickenSummary] = await Promise.all([
+            window.oracleApi.getKitchenOrders(),
+            comparisonMode ? Promise.resolve(null) : window.oracleApi.getChickenPrep()
+        ]);
+        renderOrders(orders, chickenSummary);
     } catch (error) {
-        console.error("Oracle注文データの取得に失敗しました", error);
+        console.error("注文・焼成チキンデータの取得に失敗しました", error);
         orderContainer.innerHTML = `<div class="error-panel">注文データを取得できませんでした</div>`;
     } finally {
         ordersRefreshing = false;
@@ -644,21 +749,53 @@ async function refreshOrders() {
 }
 
 function buildScheduleInput() {
+    const now = Date.now();
+    const bakeMinutes = Number(latestChickenSummary?.bakeMinutes) || 9;
+    let readyChicken = Math.max(0, Number(latestChickenSummary?.readyQty) || 0);
+    const pendingChickenReadyTimes = (latestChickenSummary?.batches || [])
+        .filter(batch => ["REQUESTED", "COOKING"].includes(String(batch.status)))
+        .flatMap(batch => {
+            const startedAtMs = parseTimestamp(batch.startedAt);
+            const readyAtMs = startedAtMs ? startedAtMs + bakeMinutes * 60_000 : now + bakeMinutes * 60_000 + 20_000;
+            return Array.from({ length: Math.max(0, Number(batch.requestedQty) || 0) }, () => readyAtMs);
+        })
+        .sort((a, b) => a - b);
+    const fallbackReadyAtMs = now + bakeMinutes * 60_000 + 20_000;
+    const chickenReadyByItem = new Map();
+    getActiveItems()
+        .filter(({ item }) => ["2402", "2404"].includes(String(item.code)) && item.workflowState === "PENDING")
+        .sort((a, b) => a.order.createdAt.toMillis() - b.order.createdAt.toMillis() || a.itemIndex - b.itemIndex)
+        .forEach(({ item }) => {
+            let itemReadyAtMs = now;
+            const quantity = Math.max(1, Number(item.qty) || 1);
+            for (let unit = 0; unit < quantity; unit += 1) {
+                if (readyChicken > 0) readyChicken -= 1;
+                else itemReadyAtMs = Math.max(itemReadyAtMs, pendingChickenReadyTimes.shift() || fallbackReadyAtMs);
+            }
+            chickenReadyByItem.set(String(item.id), itemReadyAtMs);
+        });
+
     return getActiveItems()
         .filter(entry => entry.item.workflowState === "PENDING")
-        .map(({ order, item, itemIndex, cookInfo }) => ({
-            orderId: order.id,
-            itemId: item.id,
-            itemIndex,
-            table: order.table,
-            createdAtMs: order.createdAt.toMillis(),
-            qty: item.qty,
-            code: item.code,
-            name: cookInfo.shortName || item.name,
-            cookTime: cookInfo.cookTime,
-            menuCategory: cookInfo.category,
-            station: cookInfo.section
-        }));
+        .map(({ order, item, itemIndex, cookInfo }) => {
+            const chickenStockReadyAtMs = chickenReadyByItem.get(String(item.id)) || 0;
+            return {
+                orderId: order.id,
+                itemId: item.id,
+                itemIndex,
+                table: order.table,
+                createdAtMs: order.createdAt.toMillis(),
+                qty: item.qty,
+                code: item.code,
+                name: cookInfo.shortName || item.name,
+                cookTime: cookInfo.cookTime,
+                menuCategory: cookInfo.category,
+                station: cookInfo.section,
+                chickenStockWait: chickenStockReadyAtMs > now,
+                chickenStockReadyAtMs,
+                notBeforeSeconds: chickenStockReadyAtMs > now ? (chickenStockReadyAtMs - now) / 1000 : 0
+            };
+        });
 }
 
 // 投入時刻に達した項目は固定し、残りだけを計算し直す。整理結果は端末内に保存し、注文状態そのものは変えない。
@@ -685,6 +822,7 @@ function organizePendingItems() {
     const schedule = window.KitchenScheduler.scheduleKitchenItems(schedulable, {
         nowMs: now,
         orderingStrategy: orderingMode,
+        priorityStrategy: orderingMode === "arrival" ? "legacy" : "adaptive",
         fixedReservations: constraints.fixedReservations,
         resourceNotBeforeSeconds: constraints.resourceNotBeforeSeconds,
         episodeTargetFinishSeconds: constraints.episodeTargetFinishSeconds,
@@ -715,7 +853,7 @@ function organizePendingItems() {
         const lastMean = count ? [...lastDishByOrder.values()].reduce((sum, value) => sum + value, 0) / count : 0;
         metrics.textContent = `計画基準 ${formatClock(now, false)}｜${count}伝票・${schedulable.length}品｜推定初品平均 ${formatElapsed(firstMean)}・6分以内 ${count - firstDishLateCount}/${count}｜推定全品平均 ${formatElapsed(lastMean)}・12分以内 ${[...lastDishByOrder.values()].filter(seconds => seconds <= 720).length}/${count}`;
     }
-    const firstDishNote = firstDishLateCount ? `（初品6分超過見込み ${firstDishLateCount}伝票）` : "";
+    const firstDishNote = firstDishLateCount ? `（初品6分以降の見込み ${firstDishLateCount}伝票）` : "";
     showMessage((locked.length
         ? `投入済み${locked.length}品を固定し、残り${schedulable.length}品を再整理しました`
         : `${organizedPlan.length}品の作業順を更新しました`) + stageNote + firstDishNote + timingNote,
@@ -753,12 +891,17 @@ document.getElementById("delete-btn").addEventListener("click", () => {
 });
 
 // 同じ明細・操作の多重送信を抑え、成功後に注文情報を再取得する。完成と持出しの時刻はサーバーで記録する。
-async function runWorkflowAction(itemId, action) {
+async function runWorkflowAction(itemId, action, batchId = null) {
     const key = `${itemId}:${action}`;
     if (actionInFlight.has(key)) return;
     actionInFlight.add(key);
     try {
-        if (action === "kitchen-ready") {
+        if (action === "chicken-start" || action === "chicken-ready") {
+            await window.oracleApi.updateChickenPrep(batchId, action === "chicken-start" ? "start" : "ready");
+            showMessage(action === "chicken-start"
+                ? "System卓の焼成チキンを開始しました"
+                : "焼成チキンの調理完了を記録しました。System卓から消去します");
+        } else if (action === "kitchen-ready") {
             await window.oracleApi.markKitchenReady(itemId);
             showMessage("キッチン完成を記録しました。フロア持出し待ちです");
         } else if (action === "floor-picked") {
@@ -768,7 +911,9 @@ async function runWorkflowAction(itemId, action) {
         await refreshOrders();
     } catch (error) {
         console.error("KDS状態更新に失敗しました", error);
-        showMessage("状態を更新できませんでした。画面を更新して再確認してください", "error");
+        showMessage(action === "chicken-ready"
+            ? "焼成開始から9分経過後に調理完了を登録してください"
+            : "状態を更新できませんでした。画面を更新して再確認してください", "error");
     } finally {
         actionInFlight.delete(key);
     }
@@ -778,7 +923,7 @@ organizedOrders.addEventListener("click", event => {
     const button = event.target.closest("[data-action][data-item-id]");
     if (!button || button.disabled) return;
     button.disabled = true;
-    runWorkflowAction(button.dataset.itemId, button.dataset.action);
+    runWorkflowAction(button.dataset.itemId, button.dataset.action, button.dataset.batchId);
 });
 
 // 完成から30秒以上持出しを待つ料理を目立たせる。表示の更新だけでDBの時刻は書き換えない。
@@ -823,11 +968,16 @@ function updatePlannedStartClocks() {
             }
         });
     });
+    document.querySelectorAll('button[data-action="chicken-start"]').forEach(button => {
+        button.disabled = actionInFlight.has(`${button.dataset.itemId}:chicken-start`) ||
+            Number(button.dataset.startAt) > now;
+    });
 }
 
 function updateWorkflowClocks() {
     updateCounterWaitingClocks();
     updatePlannedStartClocks();
+    updateChickenBakeTimers();
 }
 
 function formatOrderTime(ts) {
@@ -947,10 +1097,11 @@ await refreshOrders();
 
 // SSE通知で即時に再取得し、5秒間隔の取得も併用する。画面の経過時間表示は1秒間隔で更新する。
 const kitchenEvents = new EventSource(window.oracleApi.kitchenStreamUrl);
-kitchenEvents.addEventListener("kitchen-update", refreshOrders);
-kitchenEvents.addEventListener("connected", refreshOrders);
+const refreshKitchen = () => refreshOrders();
+kitchenEvents.addEventListener("kitchen-update", refreshKitchen);
+kitchenEvents.addEventListener("connected", refreshKitchen);
 window.addEventListener("beforeunload", () => kitchenEvents.close());
-window.setInterval(refreshOrders, comparisonMode ? 1000 : 5000);
+window.setInterval(refreshKitchen, comparisonMode ? 1000 : 5000);
 window.setInterval(updateWorkflowClocks, 1000);
 
 if (window.orderAppRoute() === "/kitchen/served") {

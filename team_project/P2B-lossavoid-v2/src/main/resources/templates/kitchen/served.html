@@ -76,9 +76,9 @@
 </div>
 
 <!-- API共通処理を先に読み込み、その後に画面ごとの操作を初期化する。 -->
-<script src="/oracle-spring-api-client.js" th:src="@{/oracle-spring-api-client.js}"></script>
+<script src="/oracle-spring-api-client.js?v=kds-chicken-2" th:src="@{/oracle-spring-api-client.js(v='kds-chicken-2')}"></script>
 <script src="/js/kitchen-clock.js" th:src="@{/js/kitchen-clock.js}"></script>
-<script src="/kitchen-scheduler.js" th:src="@{/kitchen-scheduler.js}"></script>
-<script src="/js/kitchen.js" th:src="@{/js/kitchen.js}" type="module"></script>
+<script src="/kitchen-scheduler.js?v=kds-sequence-2" th:src="@{/kitchen-scheduler.js(v='kds-sequence-2')}"></script>
+<script src="/js/kitchen.js?v=kds-chicken-2" th:src="@{/js/kitchen.js(v='kds-chicken-2')}" type="module"></script>
 </body>
 </html>
